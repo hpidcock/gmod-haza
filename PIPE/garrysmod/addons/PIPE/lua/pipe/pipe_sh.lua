@@ -236,29 +236,29 @@ function GetGlobalVector(var)
 end
 
 function SetGlobalAngle(var, val)
-	Entity(0):SetNetworkedVar(var, val);
+	Entity(0):SetNetworkedAngle(var, val);
 end
 
 function SetGlobalBool(var, val)
-	Entity(0):SetNetworkedVar(var, val);
+	Entity(0):SetNetworkedBool(var, val);
 end
 
 function SetGlobalEntity(var, val)
-	Entity(0):SetNetworkedVar(var, val);
+	Entity(0):SetNetworkedEntity(var, val);
 end
 
 function SetGlobalFloat(var, val)
-	Entity(0):SetNetworkedVar(var, val);
+	Entity(0):SetNetworkedFloat(var, val);
 end
 
 function SetGlobalInt(var, val)
-	Entity(0):SetNetworkedVar(var, val);
+	Entity(0):SetNetworkedInt(var, val);
 end
 
 function SetGlobalString(var, val)
-	Entity(0):SetNetworkedVar(var, val);
+	Entity(0):SetNetworkedString(var, val);
 end
 
 function SetGlobalVector(var, val)
-	Entity(0):SetNetworkedVar(var, val);
+	Entity(0):SetNetworkedVector(var, val);
 end
