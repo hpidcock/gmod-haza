@@ -1,0 +1,8 @@
+"AddonInfo"
+{
+	"name"				"PIPE"
+	"version"			"1.0"
+	"author_name"			"Haza55"
+	"info"				"Lua Network Var Replacement"
+	"override"			"0"
+}
