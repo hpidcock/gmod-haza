@@ -36,7 +36,7 @@ hook.Add("PlayerAuthed", "PIPE-PlayerAuthed", function(ply, steamid)
 	ply._Pipe = {};
 	ply._Pipe.STEAMID = steamid;
 	ply._Pipe.SOCK = nil;
-	ply._Pipe.AUTHKEY = tostring(math.random(100000000, 999999999)) .. ply._Pipe.STEAMID;
+	ply._Pipe.AUTHKEY = tostring(util.CRC(tostring(math.random(100000000, 999999999)) .. ply._Pipe.STEAMID .. tostring(math.random(100000000, 999999999))));
 	ply._Pipe.CONNECTCMDSENT = false;
 	
 	g_PipeConnections[ply._Pipe.AUTHKEY] = ply;
