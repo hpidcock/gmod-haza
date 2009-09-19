@@ -77,6 +77,8 @@ hook.Add("Think", "PIPE-RecvThink", function()
 		return; 
 	end
 	
+	if(string.len(packet) == 0) then return; end
+	
 	if(netDebug:GetBool()) then print("Incoming PIPE msg: size " .. string.len(packet) .. " bytes"); end
 	
 	local b, tbl = pcall(glon.decode, packet);
