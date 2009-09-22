@@ -1,0 +1,8 @@
+"AddonInfo"
+{
+	"name"				"P2PChat"
+	"version"			"1.0"
+	"author_name"			"Haza55"
+	"info"				"True Multi Server Global Chat"
+	"override"			"0"
+}
