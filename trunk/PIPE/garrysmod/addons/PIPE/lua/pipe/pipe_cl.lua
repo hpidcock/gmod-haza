@@ -8,7 +8,7 @@ require("glon");
 if(!socket) then
 	hook.Add("HUDPaint", "PIPE-Error", function()
 		draw.RoundedBox(3, ScrW()/2-400, ScrH()/2-64, 800, 128, Color(0, 0, 0, 200));
-		draw.SimpleText("To play on this server properly, you must download and install the ICannt GMod Addon Installer from http://icannt.org", "ScoreboardText", ScrW()/2, ScrH()/2, Color(255,0,0,255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER);
+		draw.SimpleText("To play on this server properly, you must download and install the gm_luasocket.", "ScoreboardText", ScrW()/2, ScrH()/2, Color(255,0,0,255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER);
 	end);
 end
 
