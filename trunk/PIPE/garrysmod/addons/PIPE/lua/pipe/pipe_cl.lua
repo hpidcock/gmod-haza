@@ -65,11 +65,11 @@ hook.Add("Think", "PIPE-RecvThink", function()
 	if(!g_PipeConnection) then return; end
 	
 	if(g_NextRecv > CurTime()) then return; end
-	g_NextRecv = CurTime() + 0.1;
-
+	
 	local packet, err = g_PipeConnection:receive();
 	
 	if(!packet) then
+		g_NextRecv = CurTime() + 0.1;
 		if(err == "closed") then
 			print("PIPE: Lost connection, reconnecting...");
 			PIPE_Connect();
@@ -83,7 +83,11 @@ hook.Add("Think", "PIPE-RecvThink", function()
 	
 	local b, tbl = pcall(glon.decode, packet);
 	
-	if(!b) then print(tbl); return; end
+	if(!b) then
+		print(tbl);
+		if(netDebug:GetBool()) then print("Bad Data: " .. tostring(packet)); end
+		return;
+	end
 	
 	for k, v in pairs(tbl) do
 		for c, j in pairs(v) do
