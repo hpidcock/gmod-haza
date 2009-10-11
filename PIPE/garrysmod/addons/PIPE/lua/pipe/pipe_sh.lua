@@ -34,7 +34,7 @@ function meta:SetNetworkedVar(var, val)
 	end
 	
 	if(IsEntity(val)) then
-		if(val:IsValid()) then
+		if(ValidEntity(val)) then
 			val = val:EntIndex();
 		else
 			val = -1;
@@ -95,7 +95,8 @@ end
 
 function meta:GetNetworkedString(var, def)
 	if(def == nil) then def = ""; end
-	return self:GetNetworkedVar(var) or def;
+	// Correct the string.
+	return string.Replace(tostring(self:GetNetworkedVar(var)), "|n|", "\n") or def;
 end
 
 function meta:GetNetworkedVector(var, def)
@@ -130,7 +131,8 @@ end
 
 function meta:GetNWString(var, def)
 	if(def == nil) then def = ""; end
-	return self:GetNetworkedVar(var) or def;
+	// Correct the string.
+	return string.Replace(tostring(self:GetNetworkedVar(var)), "|n|", "\n") or def;
 end
 
 function meta:GetNWVector(var, def)
@@ -163,7 +165,8 @@ function meta:SetNetworkedNumber(var, val)
 end
 
 function meta:SetNetworkedString(var, val)
-	self:SetNetworkedVar(var, tostring(val));
+	// Make the string socket safe.
+	self:SetNetworkedVar(var, string.Replace(tostring(val), "\n", "|n|"));
 end
 
 function meta:SetNetworkedVector(var, val)
@@ -191,7 +194,8 @@ function meta:SetNWInt(var, val)
 end
 
 function meta:SetNWString(var, val)
-	self:SetNetworkedVar(var, val);
+	// Make the string socket safe.
+	self:SetNetworkedVar(var, string.Replace(tostring(val), "\n", "|n|"));
 end
 
 function meta:SetNWVector(var, val)
