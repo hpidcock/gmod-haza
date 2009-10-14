@@ -6,6 +6,7 @@ AddCSLuaFile("pipe_sh.lua");
 include("pipe_sh.lua");
 
 require("socket");
+require("lanes");
 require("glon");
 
 g_PipeServer = -1;
@@ -21,6 +22,26 @@ function meta:UpdateTransmitState()
 	return TRANSMIT_NEVER;
 end
 meta = nil;
+
+if(lanes) then
+local function ThreadedSend(linda)
+	while(true) do
+		local packets = linda:receive("packets", 0);
+		local sockets = linda:receive("sockets", 0);
+		
+		for _, sock in pairs(sockets) do
+			for _, data in pairs(packets) do
+				if(sock) then
+					sock:send(data);
+				end
+			end
+		end
+	end
+end
+
+g_ThreadLinda = lanes.linda();  
+g_Thread = lanes.gen("*", ThreadedSend)(g_ThreadLinda);
+end
 
 hook.Add("EntityRemoved", "PIPE-EntityRemoved", function(ent)
 	g_NetVars[ent:EntIndex()] = nil;
@@ -91,19 +112,30 @@ hook.Add("Think", "PIPE-SenderThink", function()
 
 	local encoded = glon.encode(g_NetVarsChanged) .. "\n";
 	
-	for k, v in pairs(g_PipeConnections) do
-		if(v._Pipe.SOCK) then
-			local B, E = v._Pipe.SOCK:send(encoded);
-			
-			if(!B) then
-				if(E == "closed") then
-					v._Pipe.SOCK = nil;
-				elseif(E == "timeout") then
-					v._Pipe.SOCK:settimeout(30/1000);
-					v._Pipe.SOCK:send(encoded);
+	if(!lanes) then
+		for k, v in pairs(g_PipeConnections) do
+			if(v._Pipe.SOCK) then
+				local B, E = v._Pipe.SOCK:send(encoded);
+				
+				if(!B) then
+					if(E == "closed") then
+						v._Pipe.SOCK = nil;
+					elseif(E == "timeout") then
+						v._Pipe.SOCK:settimeout(30/1000);
+						v._Pipe.SOCK:send(encoded);
+					end
 				end
 			end
 		end
+	else
+		local sockets = {};
+		for k, v in pairs(g_PipeConnections) do
+			if(v._Pipe.SOCK) then
+				table.insert(sockets, v._Pipe.SOCK);
+			end
+		end
+		g_ThreadLinda:send("packets", {encoded});
+		g_ThreadLinda:send("sockets", sockets);
 	end
 	
 	g_NetVarsChanged = {};
@@ -136,22 +168,27 @@ end
 function SendFullUpdate(sock)
 	local data = FullUpdatePackets();
 	local timeouts = 0;
-	for _, k in ipairs(data) do
-		if(timeouts > 2) then
-			return;
-		end
-		
-		local B, E = sock:send(k);
-		
-		if(!B) then
-			if(E == "closed") then
+	if(!lanes) then
+		for _, k in ipairs(data) do
+			if(timeouts > 2) then
 				return;
-			elseif(E == "timeout") then
-				timeouts = timeouts + 1;
-				// Last chance
-				sock:send(k);
+			end
+			
+			local B, E = sock:send(k);
+			
+			if(!B) then
+				if(E == "closed") then
+					return;
+				elseif(E == "timeout") then
+					timeouts = timeouts + 1;
+					// Last chance
+					sock:send(k);
+				end
 			end
 		end
+	else
+		g_ThreadLinda:send("packets", data);
+		g_ThreadLinda:send("sockets", {sock});
 	end
 end
 
@@ -175,7 +212,6 @@ hook.Add("Think", "PIPE-Acceptor", function()
 	ServerLog("PIPE: Player PIPE Connected - AuthKey recv " .. g_PipeConnections[auth]._Pipe.AUTHKEY .. " " .. g_PipeConnections[auth]._Pipe.STEAMID);
 	
 	SendFullUpdate(g_PipeConnections[auth]._Pipe.SOCK);
-	g_PipeConnections[auth]._Pipe.SOCK:settimeout(15/1000);
 end);
 
 hook.Add("ShutDown", "PIPE-ShutDown", function()
