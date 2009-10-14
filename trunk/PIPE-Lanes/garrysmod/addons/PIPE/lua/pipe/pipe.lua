@@ -17,22 +17,20 @@ const_UpdateInterval = 0.2; // 5 Times a second
 const_BulkSendCount = 64;
 const_SingularLimit = 10;
 
-local meta = FindMetaTable("Entity");
-function meta:UpdateTransmitState()
-	return TRANSMIT_NEVER;
-end
-meta = nil;
-
-if(lanes) then
-local function ThreadedSend(linda)
+local function ThreadedSend(linda, send)
+	if(!linda) then return; end
+	if(!send) then return; end
+	
 	while(true) do
 		local packets = linda:receive("packets", 0);
 		local sockets = linda:receive("sockets", 0);
 		
-		for _, sock in pairs(sockets) do
-			for _, data in pairs(packets) do
-				if(sock) then
-					sock:send(data);
+		if(packets && sockets) then
+			for _, sock in pairs(sockets) do
+				for _, data in pairs(packets) do
+					if(sock) then
+						send(sock, data);
+					end
 				end
 			end
 		end
@@ -40,8 +38,7 @@ local function ThreadedSend(linda)
 end
 
 g_ThreadLinda = lanes.linda();  
-g_Thread = lanes.gen("*", ThreadedSend)(g_ThreadLinda);
-end
+g_Thread = lanes.gen("*", ThreadedSend)(g_ThreadLinda, _R["tcp{client}"].__index.send);
 
 hook.Add("EntityRemoved", "PIPE-EntityRemoved", function(ent)
 	g_NetVars[ent:EntIndex()] = nil;
@@ -112,31 +109,15 @@ hook.Add("Think", "PIPE-SenderThink", function()
 
 	local encoded = glon.encode(g_NetVarsChanged) .. "\n";
 	
-	if(!lanes) then
-		for k, v in pairs(g_PipeConnections) do
-			if(v._Pipe.SOCK) then
-				local B, E = v._Pipe.SOCK:send(encoded);
-				
-				if(!B) then
-					if(E == "closed") then
-						v._Pipe.SOCK = nil;
-					elseif(E == "timeout") then
-						v._Pipe.SOCK:settimeout(30/1000);
-						v._Pipe.SOCK:send(encoded);
-					end
-				end
-			end
+	local sockets = {};
+	for k, v in pairs(g_PipeConnections) do
+		if(v._Pipe.SOCK) then
+			table.insert(sockets, v._Pipe.SOCK);
 		end
-	else
-		local sockets = {};
-		for k, v in pairs(g_PipeConnections) do
-			if(v._Pipe.SOCK) then
-				table.insert(sockets, v._Pipe.SOCK);
-			end
-		end
-		g_ThreadLinda:send("packets", {encoded});
-		g_ThreadLinda:send("sockets", sockets);
 	end
+	
+	g_ThreadLinda:send("packets", {encoded});
+	g_ThreadLinda:send("sockets", sockets);
 	
 	g_NetVarsChanged = {};
 end);
@@ -166,30 +147,8 @@ function FullUpdatePackets()
 end
 
 function SendFullUpdate(sock)
-	local data = FullUpdatePackets();
-	local timeouts = 0;
-	if(!lanes) then
-		for _, k in ipairs(data) do
-			if(timeouts > 2) then
-				return;
-			end
-			
-			local B, E = sock:send(k);
-			
-			if(!B) then
-				if(E == "closed") then
-					return;
-				elseif(E == "timeout") then
-					timeouts = timeouts + 1;
-					// Last chance
-					sock:send(k);
-				end
-			end
-		end
-	else
-		g_ThreadLinda:send("packets", data);
-		g_ThreadLinda:send("sockets", {sock});
-	end
+	g_ThreadLinda:send("packets", FullUpdatePackets());
+	g_ThreadLinda:send("sockets", {sock});
 end
 
 hook.Add("Think", "PIPE-Acceptor", function()
@@ -200,7 +159,7 @@ hook.Add("Think", "PIPE-Acceptor", function()
 	cl:settimeout(2);
 	cl:setoption("keepalive", true);
 	local auth = cl:receive();
-	cl:settimeout(150/1000);
+	cl:settimeout(100/1000);
 	
 	if(!cl) then return; end
 	
@@ -208,10 +167,10 @@ hook.Add("Think", "PIPE-Acceptor", function()
 	
 	g_PipeConnections[auth]._Pipe.SOCK = cl;
 	
+	SendFullUpdate(g_PipeConnections[auth]._Pipe.SOCK);
+	
 	print("PIPE: Player PIPE Connected - AuthKey recv", g_PipeConnections[auth]._Pipe.AUTHKEY, g_PipeConnections[auth]._Pipe.STEAMID);
 	ServerLog("PIPE: Player PIPE Connected - AuthKey recv " .. g_PipeConnections[auth]._Pipe.AUTHKEY .. " " .. g_PipeConnections[auth]._Pipe.STEAMID);
-	
-	SendFullUpdate(g_PipeConnections[auth]._Pipe.SOCK);
 end);
 
 hook.Add("ShutDown", "PIPE-ShutDown", function()
