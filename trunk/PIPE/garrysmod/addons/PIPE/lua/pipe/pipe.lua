@@ -12,7 +12,7 @@ g_PipeServer = -1;
 g_PipeConnections = {};
 
 const_JoinCmdDelay = 5;
-const_UpdateInterval = 1/3;
+const_UpdateInterval = 0.2; // 5 Times a second
 const_BulkSendCount = 64;
 const_SingularLimit = 10;
 
