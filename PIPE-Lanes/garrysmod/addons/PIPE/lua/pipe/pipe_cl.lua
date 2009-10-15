@@ -17,11 +17,9 @@ PIPE.Net.Connects = 0;
 
 local netDebug = CreateClientConVar( "pipe_debug", "0", false, false );
 
-usermessage.Hook("PIPE-ResetEnt", function(bf)
-    local entid = bf:ReadLong();
-	PIPE.NetVar.Vars[entid] = {};
-end);
-
+///////////////////////////////////////////////////////////////////////////////////////////
+// Connection and Authentication
+///////////////////////////////////////////////////////////////////////////////////////////
 function PIPE.Net.Connect()
 	if(PIPE.Net.Connection) then
 		PIPE.Net.Connection:close();
@@ -52,13 +50,14 @@ function PIPE.Net.Connect()
 	print("PIPE: Connected to Server ", const_ServerIP .. ":" .. const_BindPort);
 end
 
-usermessage.Hook("PIPE-DemandConnect", function(bf)
+function PIPE.Net.RecvJoinCmd(bf)
     PIPE.Net.AuthKey = bf:ReadString();
 	PIPE.Net.Connect();
-end);
+end
+usermessage.Hook("PIPE-DemandConnect", PIPE.Net.RecvJoinCmd);
 
 PIPE.Net.NextRecv = CurTime();
-hook.Add("Think", "PIPE-RecvThink", function()
+function PIPE.Net.Receiver()
 	if(!PIPE.Net.Connection) then return; end
 	
 	if(PIPE.Net.NextRecv > CurTime()) then return; end
@@ -90,6 +89,24 @@ hook.Add("Think", "PIPE-RecvThink", function()
 		return;
 	end
 	
+	if(typ == PIPE_NETWORKVAR) then
+		PIPE.NetVar.MergeVarTable(tbl);
+	elseif(typ == PIPE_USERMESSAGE) then
+	elseif(typ == PIPE_DATASTREAM) then
+	end
+end
+hook.Add("Think", "PIPE-RecvThink", PIPE.Net.Receiver);
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// Networked Varibles
+///////////////////////////////////////////////////////////////////////////////////////////
+function PIPE.NetVar.ResetEntity(bf)
+    local entid = bf:ReadLong();
+	PIPE.NetVar.Vars[entid] = {};
+end
+usermessage.Hook("PIPE-ResetEnt", PIPE.NetVar.ResetEntity);
+
+function PIPE.NetVar.MergeVarTable(tbl)
 	for k, v in pairs(tbl) do
 		for c, j in pairs(v) do
 			PIPE.NetVar.Vars[k] = PIPE.NetVar.Vars[k] or {};
@@ -102,6 +119,6 @@ hook.Add("Think", "PIPE-RecvThink", function()
 			PIPE.NetVar.Vars[k][c] = j;
 		end
 	end
-end);
+end
 
 print("PIPE: Loaded!");
