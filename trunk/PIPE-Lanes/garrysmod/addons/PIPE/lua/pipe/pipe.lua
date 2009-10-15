@@ -12,6 +12,8 @@ const_JoinCmdDelay = 5;
 const_UpdateInterval = 0.2;
 const_BulkSendCount = 64;
 const_SingularLimit = 10;
+const_PlayersPerThread = 8;
+const_MaxPlayers = MaxPlayers();
 
 function PIPE.Msg(s)
 	print(s);
@@ -49,10 +51,27 @@ function PIPE.Net.ThreadedSend(linda, send)
 	end
 end
 
-PIPE.Net.ThreadLinda = lanes.linda();  
-PIPE.Net.Thread = lanes.gen("*", PIPE.Net.ThreadedSend)(PIPE.Net.ThreadLinda, _R["tcp{client}"].__index.send);
+function PIPE.Net.InitThreadStates(threadCount)
+	PIPE.Net.Threads = {};
+	PIPE.Net.ThreadCount = threadCount;
+	
+	local function NewThread()
+		local Thread = {};
+		Thread.Linda = lanes.linda();
+		Thread.Thread = lanes.gen("*", PIPE.Net.ThreadedSend)(Thread.Linda, _R["tcp{client}"].__index.send);
+		return Thread;
+	end
+	
+	for i = 1, threadCount do
+		PIPE.Net.Threads[i] = NewThread();
+	end
+	
+	PIPE.Msg("PIPE: Created " .. tostring(threadCount) .. " sender thread(s).");
+end
 
-function PIPE.Net.Send(typ, packets, sockets)
+PIPE.Net.InitThreadStates(math.ceil(const_MaxPlayers / const_PlayersPerThread));
+
+function PIPE.Net.Send(typ, packets, clients)
 	// This can never be a \n
 	if(typ >= 0x0A) then typ = typ + 1; end
 	
@@ -60,8 +79,23 @@ function PIPE.Net.Send(typ, packets, sockets)
 		packets[k] = string.char(typ) .. v;
 	end
 	
-	PIPE.Net.ThreadLinda:send("packets", packets);
-	PIPE.Net.ThreadLinda:send("sockets", sockets);
+	local sockets = {};
+	for _, v in pairs(clients) do
+		if(v.SOCK) then
+			local threadid = math.ceil((v.INDEX / const_MaxPlayers) * PIPE.Net.ThreadCount);
+			sockets[threadid] = sockets[threadid] or {};
+			table.insert(sockets[threadid], v.SOCK);
+		end
+	end
+	
+	for k, v in pairs(sockets) do
+		local thread = PIPE.Net.Threads[k];
+	
+		if(thread) then
+			thread.Linda:send("packets", packets);
+			thread.Linda:send("sockets", v);
+		end
+	end	
 end
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -72,6 +106,7 @@ function PIPE.Net.InitPlayer(ply, steamid)
 	
 	ply.PIPE = {};
 	ply.PIPE.STEAMID = steamid;
+	ply.PIPE.INDEX = ply:EntIndex();
 	ply.PIPE.SOCK = nil;
 	ply.PIPE.AUTHKEY = tostring(util.CRC(tostring(math.random(100000000, 999999999)) .. ply.PIPE.STEAMID .. tostring(math.random(100000000, 999999999))));
 	ply.PIPE.CONNECTCMDSENT = false;
@@ -122,7 +157,9 @@ function PIPE.Net.SocketListener()
 	
 	cl:settimeout(2);
 	cl:setoption("keepalive", true);
+	
 	local auth = cl:receive();
+	
 	cl:settimeout(100/1000);
 	
 	if(!cl) then return; end
@@ -131,7 +168,7 @@ function PIPE.Net.SocketListener()
 	
 	PIPE.Net.Connections[auth].PIPE.SOCK = cl;
 	
-	PIPE.Net.Send(PIPE_NETWORKVAR, PIPE.NetVar.FullUpdatePackets(), {cl});
+	PIPE.Net.Send(PIPE_NETWORKVAR, PIPE.NetVar.FullUpdatePackets(), {PIPE.Net.Connections[auth].PIPE});
 	
 	PIPE.Msg("PIPE: Player PIPE Connected - AuthKey recv " .. PIPE.Net.Connections[auth].PIPE.AUTHKEY .. " " .. PIPE.Net.Connections[auth].PIPE.STEAMID);
 end
@@ -177,14 +214,14 @@ function PIPE.NetVar.Sender()
 
 	local encoded = glon.encode(PIPE.NetVar.Changes) .. "\n";
 	
-	local sockets = {};
+	local clients = {};
 	for k, v in pairs(PIPE.Net.Connections) do
 		if(v.PIPE.SOCK) then
-			table.insert(sockets, v.PIPE.SOCK);
+			table.insert(clients, v.PIPE);
 		end
 	end
 
-	PIPE.Net.Send(PIPE_NETWORKVAR, {encoded}, sockets);
+	PIPE.Net.Send(PIPE_NETWORKVAR, {encoded}, clients);
 	
 	PIPE.NetVar.Changes = {};
 end
