@@ -12,7 +12,7 @@ const_JoinCmdDelay = 5;
 const_UpdateInterval = 0.2;
 const_BulkSendCount = 64;
 const_SingularLimit = 10;
-const_PlayersPerThread = 8;
+const_PlayersPerThread = 4;
 const_MaxPlayers = MaxPlayers();
 
 function PIPE.Msg(s)
@@ -58,7 +58,7 @@ function PIPE.Net.InitThreadStates(threadCount)
 	local function NewThread()
 		local Thread = {};
 		Thread.Linda = lanes.linda();
-		Thread.Thread = lanes.gen("*", PIPE.Net.ThreadedSend)(Thread.Linda, _R["tcp{client}"].__index.send);
+		Thread.Thread = lanes.gen("*", PIPE.Net.ThreadedSend)(Thread.Linda, tcpsend);
 		return Thread;
 	end
 	
@@ -84,7 +84,7 @@ function PIPE.Net.Send(typ, packets, clients)
 		if(v.SOCK) then
 			local threadid = math.ceil((v.INDEX / const_MaxPlayers) * PIPE.Net.ThreadCount);
 			sockets[threadid] = sockets[threadid] or {};
-			table.insert(sockets[threadid], v.SOCK);
+			table.insert(sockets[threadid], v.SOCK:getfd());
 		end
 	end
 	
@@ -163,9 +163,7 @@ function PIPE.Net.SocketListener()
 	cl:settimeout(100/1000);
 	
 	if(!cl) then return; end
-	
-	if(!PIPE.Net.Connections[auth]) then cl:close(); return; end
-	
+
 	PIPE.Net.Connections[auth].PIPE.SOCK = cl;
 	
 	PIPE.Net.Send(PIPE_NETWORKVAR, PIPE.NetVar.FullUpdatePackets(), {PIPE.Net.Connections[auth].PIPE});
@@ -180,7 +178,6 @@ function PIPE.Net.Shutdown()
 	for _, v in ipairs(PIPE.Net.Connections) do
 		if(v.PIPE.SOCK) then
 			v.PIPE.SOCK:close();
-			v.PIPE.SOCK = nil;
 		end
 	end
 	
