@@ -11,8 +11,9 @@ require("glon");
 const_JoinCmdDelay = 5;
 const_UpdateInterval = 0.2;
 const_BulkSendCount = 64;
-const_SingularLimit = 10;
+const_SingularLimit = 16;
 const_PlayersPerThread = 4;
+const_TCPSendTimeOut = 150;
 const_MaxPlayers = MaxPlayers();
 
 function PIPE.Msg(s)
@@ -23,7 +24,7 @@ end
 PIPE.Net.Server = -1;
 PIPE.Net.Connections = {};
 
-PIPE.Net.Server = socket.bind(const_ServerIP, const_BindPort, 64);
+PIPE.Net.Server = socket.bind(const_ServerIP, const_BindPort, const_MaxPlayers);
 PIPE.Net.Server:settimeout(0);
 	
 PIPE.Msg("PIPE: Server Bound.");
@@ -43,7 +44,7 @@ function PIPE.Net.ThreadedSend(linda, send)
 			for _, sock in pairs(sockets) do
 				for _, data in pairs(packets) do
 					if(sock) then
-						send(sock, data);
+						send(sock, data, const_TCPSendTimeOut);
 					end
 				end
 			end
@@ -58,7 +59,7 @@ function PIPE.Net.InitThreadStates(threadCount)
 	local function NewThread()
 		local Thread = {};
 		Thread.Linda = lanes.linda();
-		Thread.Thread = lanes.gen("*", PIPE.Net.ThreadedSend)(Thread.Linda, tcpsend);
+		Thread.Thread = lanes.gen("*", PIPE.Net.ThreadedSend)(Thread.Linda, tcpsend); // tcpsend is a thread safe function
 		return Thread;
 	end
 	
@@ -160,10 +161,12 @@ function PIPE.Net.SocketListener()
 	
 	local auth = cl:receive();
 	
-	cl:settimeout(100/1000);
+	cl:settimeout(0); // This timeout is not used for the threadsafe tcpsend
 	
 	if(!cl) then return; end
-
+	
+	if(!PIPE.Net.Connections[auth]) then cl:close(); return; end
+	
 	PIPE.Net.Connections[auth].PIPE.SOCK = cl;
 	
 	PIPE.Net.Send(PIPE_NETWORKVAR, PIPE.NetVar.FullUpdatePackets(), {PIPE.Net.Connections[auth].PIPE});
