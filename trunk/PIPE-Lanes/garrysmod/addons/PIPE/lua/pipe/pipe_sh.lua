@@ -118,7 +118,11 @@ end
 function meta:GetNetworkedString(var, def)
 	if(def == nil) then def = ""; end
 	// Correct the string.
-	return string.Replace(tostring(self:GetNetworkedVar(var)), "|n|", "\n") or def;
+	local str = self:GetNetworkedVar(var);
+	if(!str) then
+		return def;
+	end
+	return string.Replace(tostring(self:GetNetworkedVar(var)), "|n|", "\n");
 end
 
 function meta:GetNetworkedVector(var, def)
@@ -154,7 +158,11 @@ end
 function meta:GetNWString(var, def)
 	if(def == nil) then def = ""; end
 	// Correct the string.
-	return string.Replace(tostring(self:GetNetworkedVar(var)), "|n|", "\n") or def;
+	local str = self:GetNetworkedVar(var);
+	if(!str) then
+		return def;
+	end
+	return string.Replace(tostring(self:GetNetworkedVar(var)), "|n|", "\n");
 end
 
 function meta:GetNWVector(var, def)
@@ -188,6 +196,10 @@ end
 
 function meta:SetNetworkedString(var, val)
 	// Make the string socket safe.
+	if(!val) then
+		self:SetNetworkedVar(var, nil);
+		return;
+	end
 	self:SetNetworkedVar(var, string.Replace(tostring(val), "\n", "|n|"));
 end
 
@@ -217,6 +229,10 @@ end
 
 function meta:SetNWString(var, val)
 	// Make the string socket safe.
+	if(!val) then
+		self:SetNetworkedVar(var, nil);
+		return;
+	end
 	self:SetNetworkedVar(var, string.Replace(tostring(val), "\n", "|n|"));
 end
 
