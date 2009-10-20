@@ -1,119 +1,187 @@
 // Authour: Haza55
-
 AddCSLuaFile("pipe_cl.lua");
 AddCSLuaFile("pipe_sh.lua");
 
 include("pipe_sh.lua");
 
-require("socket");
+require("threadsafesockets");
 require("glon");
 
-g_PipeServer = -1;
-g_PipeConnections = {};
-
 const_JoinCmdDelay = 5;
-const_UpdateInterval = 0.2; // 5 Times a second
+const_UpdateInterval = 0.2;
 const_BulkSendCount = 64;
-const_SingularLimit = 10;
+const_SingularLimit = 16;
+const_PlayersPerThread = 2;
+const_TCPSendTimeOut = 200;
+const_MaxPlayers = MaxPlayers();
 
-local meta = FindMetaTable("Entity");
-function meta:UpdateTransmitState()
-	return TRANSMIT_NEVER;
-end
-meta = nil;
-
-hook.Add("EntityRemoved", "PIPE-EntityRemoved", function(ent)
-	g_NetVars[ent:EntIndex()] = nil;
-	g_NetVarsProxies[ent] = nil;
-	g_NetVarsChanged[ent:EntIndex()] = nil;
-	local recpt = RecipientFilter();
-	recpt:AddAllPlayers();
-	umsg.Start("PIPE-ResetEnt", recpt);
-		umsg.Long(ent:EntIndex());
-	umsg.End();
-end);
-
-hook.Add("PlayerAuthed", "PIPE-PlayerAuthed", function(ply, steamid)
-	g_PipeConnections = g_PipeConnections or {};
-	
-	ply._Pipe = {};
-	ply._Pipe.STEAMID = steamid;
-	ply._Pipe.SOCK = nil;
-	ply._Pipe.AUTHKEY = tostring(util.CRC(tostring(math.random(100000000, 999999999)) .. ply._Pipe.STEAMID .. tostring(math.random(100000000, 999999999))));
-	ply._Pipe.CONNECTCMDSENT = false;
-	
-	g_PipeConnections[ply._Pipe.AUTHKEY] = ply;
-	
-	print("PIPE: Player Connected - AuthKey set to ", ply._Pipe.AUTHKEY);
-	ServerLog("PIPE: Player Connected - AuthKey set to " .. ply._Pipe.AUTHKEY);
-end);
-
-function PIPE_SendJoinCmd(ply)
-	if(!ply || !ply:IsValid() || !ply:IsPlayer()) then return; end
-
-	umsg.Start("PIPE-DemandConnect", ply);
-		umsg.String(ply._Pipe.AUTHKEY);
-	umsg.End();
- 
-	ply._Pipe.CONNECTCMDSENT = true;
-	
-	print("PIPE: Player Initial Spawn - AuthKey sent to ", ply._Pipe.STEAMID);
-	ServerLog("PIPE: Player Initial Spawn - AuthKey sent to " .. ply._Pipe.STEAMID);
+function PIPE.Msg(s)
+	print(s);
+	ServerLog(s);
 end
 
-hook.Add("PlayerInitialSpawn", "PIPE-PlayerInitialSpawn", function(ply)
-	if(!ply._Pipe) then return; end
-	if(ply._Pipe.CONNECTCMDSENT) then return; end
-	
-	timer.Simple(const_JoinCmdDelay, PIPE_SendJoinCmd, ply);
-end);
+PIPE.Net.Server = nil;
+PIPE.Net.Connections = {};
 
-hook.Add("PlayerDisconnected", "PIPE-PlayerDisconnected", function(ply)
-	if(!ply._Pipe) then return; end
+PIPE.Net.Server = tcplisten(const_ServerIP, const_BindPort, const_MaxPlayers);
 	
-	g_PipeConnections[ply._Pipe.AUTHKEY] = nil;
+PIPE.Msg("PIPE: Server Bound.");
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// Multithreaded Sending
+///////////////////////////////////////////////////////////////////////////////////////////
+PIPE.Net.ThreadCount = math.ceil(const_MaxPlayers / const_PlayersPerThread)
+
+function PIPE.Net.Send(typ, packets, clients)
+	// This can never be a \n
+	if(typ >= 0x0A) then typ = typ + 1; end
 	
-	if(!ply._Pipe.SOCK) then return; end
-
-	ply._Pipe.SOCK:close();
-	print("PIPE: Player Disconnected - Closed pipe with ", ply._Pipe.STEAMID);
-	ServerLog("PIPE: Player Disconnected - Closed pipe with " .. ply._Pipe.STEAMID);
-end);
-
-g_NextSend = CurTime();
-
-hook.Add("Think", "PIPE-SenderThink", function()
-	if(CurTime() < g_NextSend) then return; end
-	g_NextSend = CurTime() + const_UpdateInterval;
+	for k, v in pairs(packets) do
+		packets[k] = string.char(typ) .. v;
+	end
 	
-	if(!g_NetVarsAnyChanges || table.Count(g_NetVarsChanged) == 0) then return; end
-	g_NetVarsAnyChanges = false;
-
-	local encoded = glon.encode(g_NetVarsChanged) .. "\n";
-	
-	for k, v in pairs(g_PipeConnections) do
-		if(v._Pipe.SOCK) then
-			local B, E = v._Pipe.SOCK:send(encoded);
-			
-			if(!B) then
-				if(E == "closed") then
-					v._Pipe.SOCK = nil;
-				elseif(E == "timeout") then
-					v._Pipe.SOCK:settimeout(30/1000);
-					v._Pipe.SOCK:send(encoded);
-				end
-			end
+	local sockets = {};
+	for _, v in pairs(clients) do
+		if(v.SOCK) then
+			local threadid = math.ceil((v.INDEX / const_MaxPlayers) * PIPE.Net.ThreadCount);
+			sockets[threadid] = sockets[threadid] or {};
+			table.insert(sockets[threadid], v.SOCK);
 		end
 	end
 	
-	g_NetVarsChanged = {};
-end);
+	for k, v in pairs(sockets) do
+		tcpsend(packets, v, const_TCPSendTimeOut);
+	end	
+end
 
-function FullUpdatePackets()
+///////////////////////////////////////////////////////////////////////////////////////////
+// Connection and Authentication
+///////////////////////////////////////////////////////////////////////////////////////////
+function PIPE.Net.InitPlayer(ply, steamid)
+	PIPE.Net.Connections = PIPE.Net.Connections or {};
+	
+	ply.PIPE = {};
+	ply.PIPE.STEAMID = steamid;
+	ply.PIPE.INDEX = ply:EntIndex();
+	ply.PIPE.SOCK = nil;
+	ply.PIPE.AUTHKEY = tostring(util.CRC(tostring(math.random(100000000, 999999999)) .. ply.PIPE.STEAMID .. tostring(math.random(100000000, 999999999))));
+	ply.PIPE.CONNECTCMDSENT = false;
+	
+	PIPE.Net.Connections[ply.PIPE.AUTHKEY] = ply;
+	
+	PIPE.Msg("PIPE: Player Connected - AuthKey set to " .. ply.PIPE.AUTHKEY);
+end
+hook.Add("PlayerAuthed", "PIPE-PlayerAuthed", PIPE.Net.InitPlayer);
+
+function PIPE.Net.SendJoinCmd(ply)
+	if(!ply || !ply:IsValid() || !ply:IsPlayer()) then return; end
+
+	umsg.Start("PIPE-DemandConnect", ply);
+		umsg.String(ply.PIPE.AUTHKEY);
+	umsg.End();
+ 
+	ply.PIPE.CONNECTCMDSENT = true;
+	
+	PIPE.Msg("PIPE: Player Initial Spawn - AuthKey sent to " .. ply.PIPE.STEAMID);
+end
+
+function PIPE.Net.DispatchJoinCmd(ply)
+	if(!ply.PIPE) then return; end
+	if(ply.PIPE.CONNECTCMDSENT) then return; end
+	
+	timer.Simple(const_JoinCmdDelay, PIPE.Net.SendJoinCmd, ply);
+end
+hook.Add("PlayerInitialSpawn", "PIPE-PlayerInitialSpawn", PIPE.Net.DispatchJoinCmd);
+
+function PIPE.Net.DisconnectPlayer(ply)
+	if(!ply.PIPE) then return; end
+	
+	PIPE.Net.Connections[ply.PIPE.AUTHKEY] = nil;
+	
+	if(!ply.PIPE.SOCK) then return; end
+
+	tcpclose(ply.PIPE.SOCK);
+	
+	PIPE.Msg("PIPE: Player Disconnected - Closed pipe with " .. ply.PIPE.STEAMID);
+end
+hook.Add("PlayerDisconnected", "PIPE-PlayerDisconnected", PIPE.Net.DisconnectPlayer);
+
+function PIPE.Net.SocketListener()
+	local cl = tcpaccept(PIPE.Net.Server);
+	
+	if(!cl || cl == -1) then return; end
+	
+	local auth = tcprecv(cl, 2000);
+	
+	if(!PIPE.Net.Connections[auth]) then tcpclose(cl); return; end
+	
+	if(!PIPE.Net.Connections[auth].PIPE.SOCK) then tcpclose(PIPE.Net.Connections[auth].PIPE.SOCK); end
+	
+	PIPE.Net.Connections[auth].PIPE.SOCK = cl;
+	
+	PIPE.Net.Send(PIPE_NETWORKVAR, PIPE.NetVar.FullUpdatePackets(), {PIPE.Net.Connections[auth].PIPE});
+	
+	PIPE.Msg("PIPE: Player PIPE Connected - AuthKey recv " .. PIPE.Net.Connections[auth].PIPE.AUTHKEY .. " " .. PIPE.Net.Connections[auth].PIPE.STEAMID);
+end
+hook.Add("Think", "PIPE-Acceptor", PIPE.Net.SocketListener);
+
+function PIPE.Net.Shutdown()
+	tcpclose(PIPE.Net.Server);
+	
+	for _, v in ipairs(PIPE.Net.Connections) do
+		if(v.PIPE.SOCK) then
+			tcpclose(v.PIPE.SOCK);
+		end
+	end
+	
+	PIPE.Msg("PIPE: ShutDown - Unbinding, and disconnecting all players.");
+end
+hook.Add("ShutDown", "PIPE-ShutDown", PIPE.Net.Shutdown);
+
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// Datastreams
+///////////////////////////////////////////////////////////////////////////////////////////
+
+// TODO
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// User Messages
+///////////////////////////////////////////////////////////////////////////////////////////
+
+// TODO
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// Networked Varibles
+///////////////////////////////////////////////////////////////////////////////////////////
+PIPE.NetVar.NextSend = CurTime();
+function PIPE.NetVar.Sender()
+	if(CurTime() < PIPE.NetVar.NextSend) then return; end
+	PIPE.NetVar.NextSend = CurTime() + const_UpdateInterval;
+	
+	if(!PIPE.NetVar.ChangesMade || table.Count(PIPE.NetVar.Changes) == 0) then return; end
+	PIPE.NetVar.ChangesMade = false;
+
+	local encoded = glon.encode(PIPE.NetVar.Changes) .. "\n";
+	
+	local clients = {};
+	for k, v in pairs(PIPE.Net.Connections) do
+		if(v.PIPE.SOCK) then
+			table.insert(clients, v.PIPE);
+		end
+	end
+
+	PIPE.Net.Send(PIPE_NETWORKVAR, {encoded}, clients);
+	
+	PIPE.NetVar.Changes = {};
+end
+hook.Add("Think", "PIPE-SenderThink", PIPE.NetVar.Sender);
+
+function PIPE.NetVar.FullUpdatePackets()
 	local ret = {};
 	local bulkTemp = {};
 	
-	for k, v in pairs(g_NetVars) do
+	for k, v in pairs(PIPE.NetVar.Vars) do
 		if(Entity(k):IsWorld() or Entity(k):IsPlayer() or table.Count(v) >= const_SingularLimit) then
 			table.insert(ret, glon.encode({[k]=v}) .. "\n");
 		else
@@ -133,68 +201,16 @@ function FullUpdatePackets()
 	return ret;
 end
 
-function SendFullUpdate(sock)
-	local data = FullUpdatePackets();
-	local timeouts = 0;
-	for _, k in ipairs(data) do
-		if(timeouts > 2) then
-			return;
-		end
-		
-		local B, E = sock:send(k);
-		
-		if(!B) then
-			if(E == "closed") then
-				return;
-			elseif(E == "timeout") then
-				timeouts = timeouts + 1;
-				// Last chance
-				sock:send(k);
-			end
-		end
-	end
+function PIPE.NetVar.ResetEntity(ent)
+	PIPE.NetVar.Vars[ent:EntIndex()] = nil;
+	PIPE.NetVar.Proxies[ent] = nil;
+	PIPE.NetVar.Changes[ent:EntIndex()] = nil;
+	
+	local recpt = RecipientFilter();
+	recpt:AddAllPlayers();
+	
+	umsg.Start("PIPE-ResetEnt", recpt);
+		umsg.Long(ent:EntIndex());
+	umsg.End();
 end
-
-hook.Add("Think", "PIPE-Acceptor", function()
-	local cl = g_PipeServer:accept();
-	
-	if(!cl) then return; end
-	
-	cl:settimeout(2);
-	cl:setoption("keepalive", true);
-	local auth = cl:receive();
-	cl:settimeout(150/1000);
-	
-	if(!cl) then return; end
-	
-	if(!g_PipeConnections[auth]) then cl:close(); return; end
-	
-	g_PipeConnections[auth]._Pipe.SOCK = cl;
-	
-	print("PIPE: Player PIPE Connected - AuthKey recv", g_PipeConnections[auth]._Pipe.AUTHKEY, g_PipeConnections[auth]._Pipe.STEAMID);
-	ServerLog("PIPE: Player PIPE Connected - AuthKey recv " .. g_PipeConnections[auth]._Pipe.AUTHKEY .. " " .. g_PipeConnections[auth]._Pipe.STEAMID);
-	
-	SendFullUpdate(g_PipeConnections[auth]._Pipe.SOCK);
-	g_PipeConnections[auth]._Pipe.SOCK:settimeout(15/1000);
-end);
-
-hook.Add("ShutDown", "PIPE-ShutDown", function()
-	g_PipeServer:close();
-	
-	for _, v in ipairs(g_PipeConnections) do
-		if(v._Pipe.SOCK) then
-			v._Pipe.SOCK:close();
-			v._Pipe.SOCK = nil;
-		end
-	end
-	
-	print("PIPE: ShutDown - Unbinding, and disconnecting all players.");
-	ServerLog("PIPE: ShutDown - Unbinding, and disconnecting all players.");
-end);
-
-g_PipeServer = socket.bind(const_ServerIP, const_BindPort, 64);
-g_PipeServer:settimeout(0);
-	
-print("PIPE: Server Bound!\n");
-ServerLog("PIPE: Server Bound!");
-
+hook.Add("EntityRemoved", "PIPE-EntityRemoved", PIPE.NetVar.ResetEntity);
