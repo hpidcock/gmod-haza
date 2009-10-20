@@ -1,14 +1,36 @@
 // Authour: Haza55
-
-const_ServerIP = "192.168.1.3";
+const_ServerIP = "202.125.36.171";
 const_BindPort = 27080;
 
-g_NetVars = {};
+PIPE_NETWORKVAR 	= 1;
+PIPE_USERMESSAGE 	= 2;
+PIPE_DATASTREAM 	= 3;
+
+PIPE = {};
+PIPE.Net = {};
+PIPE.NetVar = {};
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// Datastreams
+///////////////////////////////////////////////////////////////////////////////////////////
+
+// TODO
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// User Messages
+///////////////////////////////////////////////////////////////////////////////////////////
+
+// TODO
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// Networked Varibles
+///////////////////////////////////////////////////////////////////////////////////////////
+PIPE.NetVar.Vars = {};
 if SERVER then
-g_NetVarsChanged = {}; 
-g_NetVarsAnyChanges = false;
+	PIPE.NetVar.Changes = {}; 
+	PIPE.NetVar.ChangesMade = false;
 end
-g_NetVarsProxies = {};
+PIPE.NetVar.Proxies = {};
 
 local meta = FindMetaTable("Entity");
 
@@ -18,9 +40,9 @@ function meta:GetNetworkedVar(var)
 	end
 
 	local ei = self:EntIndex();
-	g_NetVars[ei] = g_NetVars[ei] or {};
+	PIPE.NetVar.Vars[ei] = PIPE.NetVar.Vars[ei] or {};
 	
-	return g_NetVars[ei][var];
+	return PIPE.NetVar.Vars[ei][var];
 end
 
 function meta:SetNetworkedVar(var, val)
@@ -42,20 +64,20 @@ function meta:SetNetworkedVar(var, val)
 	end
 
 	local ei = self:EntIndex();
-	g_NetVars[ei] = g_NetVars[ei] or {};
-	g_NetVarsProxies[self] = g_NetVarsProxies[self] or {};
+	PIPE.NetVar.Vars[ei] = PIPE.NetVar.Vars[ei] or {};
+	PIPE.NetVar.Proxies[self] = PIPE.NetVar.Proxies[self] or {};
 	
-	if(g_NetVars[ei][var] == val) then return; end
+	if(PIPE.NetVar.Vars[ei][var] == val) then return; end
 	
-	if(type(g_NetVarsProxies[self][var]) == "function") then
-		pcall(g_NetVarsProxies[self][var], self, var, g_NetVars[ei][var], val);
+	if(type(PIPE.NetVar.Proxies[self][var]) == "function") then
+		pcall(PIPE.NetVar.Proxies[self][var], self, var, PIPE.NetVar.Vars[ei][var], val);
 	end
 	
-	g_NetVars[ei][var] = val;
+	PIPE.NetVar.Vars[ei][var] = val;
 	if SERVER then
-	g_NetVarsChanged[ei] = g_NetVarsChanged[ei] or {};
-	g_NetVarsChanged[ei][var] = val; 
-	g_NetVarsAnyChanges = true;
+	PIPE.NetVar.Changes[ei] = PIPE.NetVar.Changes[ei] or {};
+	PIPE.NetVar.Changes[ei][var] = val; 
+	PIPE.NetVar.ChangesMade = true;
 	end
 end
 
@@ -64,8 +86,8 @@ function meta:SetNetworkedVarProxy(var, func)
 		var = string.lower(var);
 	end
 
-	g_NetVarsProxies[self] = g_NetVarsProxies[self] or {};
-	g_NetVarsProxies[self][var] = func;
+	PIPE.NetVar.Proxies[self] = PIPE.NetVar.Proxies[self] or {};
+	PIPE.NetVar.Proxies[self][var] = func;
 end
 
 function meta:GetNetworkedAngle(var, def)
@@ -174,6 +196,10 @@ end
 
 function meta:SetNetworkedString(var, val)
 	// Make the string socket safe.
+	if(!val) then
+		self:SetNetworkedVar(var, nil);
+		return;
+	end
 	self:SetNetworkedVar(var, string.Replace(tostring(val), "\n", "|n|"));
 end
 
@@ -203,6 +229,10 @@ end
 
 function meta:SetNWString(var, val)
 	// Make the string socket safe.
+	if(!val) then
+		self:SetNetworkedVar(var, nil);
+		return;
+	end
 	self:SetNetworkedVar(var, string.Replace(tostring(val), "\n", "|n|"));
 end
 
