@@ -13,6 +13,7 @@ struct TcpWorkerData
 
 	SOCKET *socks;
 	int sockcount;
+	char **dataSocketSpecific;
 
 	int timeout;
 };
@@ -59,19 +60,41 @@ DWORD WINAPI _TCP_SEND_WORKER(LPVOID param)
 
 		for(int q = 0; q < d->sockcount; q++)
 		{
-			_TCP_SEND(d->socks[q], data, timeout);
+			if(d->dataSocketSpecific[q] != NULL)
+			{
+				int dataLen = strlen(data);
+				int dataLenSS = strlen(d->dataSocketSpecific[q]);
+
+				char *newData = (char *)malloc(dataLen + dataLenSS + 1);
+
+				memcpy(newData, data, dataLen);
+				memcpy(newData + dataLen, d->dataSocketSpecific[q], dataLenSS);
+				newData[dataLen + dataLenSS] = 0;
+
+				_TCP_SEND(d->socks[q], newData, timeout);
+
+				free(newData);
+				free(d->dataSocketSpecific[q]);
+				d->dataSocketSpecific[q] = NULL;
+			}
+			else
+			{
+				_TCP_SEND(d->socks[q], data, timeout);
+			}
 		}
 
 		free(d->data[i]);
 	}
 
 	free(d->socks);
+	free(d->dataSocketSpecific);
 	free(d->data);
 	free(d);
 
 	return 0;
 }
 
+// tcpsend(table of datastrings, table of sockets, table of datastrings that are sent once unique to a socket index, timeout of send)
 int tcpsend(lua_State* L)
 {
 	TcpWorkerData *newData = (TcpWorkerData *)malloc(sizeof(TcpWorkerData));
@@ -100,18 +123,36 @@ int tcpsend(lua_State* L)
 	int sockcount = luaL_getn(L, 2);
 
 	newData->socks = (SOCKET *)malloc(sockcount * sizeof(SOCKET));
+	newData->dataSocketSpecific = (char **)malloc(sockcount * sizeof(char *));
 	newData->sockcount = sockcount;
 
 	for(int i = 0; i < sockcount; i++)
 	{
+		// Socket
 		lua_rawgeti(L, 2, i + 1);
 		SOCKET sock = lua_tointeger(L, -1);
 		lua_pop(L, 1);
 
 		newData->socks[i] = sock;
+
+		// Socket Specific Data
+		lua_rawgeti(L, 3, i + 1);
+		const char *str = lua_tostring(L, -1);
+		lua_pop(L, 1);
+
+		if(str == NULL)
+		{
+			newData->dataSocketSpecific[i] = NULL;
+			continue;
+		}
+
+		int strl = strlen(str);
+		newData->dataSocketSpecific[i] = (char *)malloc(strl + 1);
+		memcpy(newData->dataSocketSpecific[i], str, strl);
+		newData->dataSocketSpecific[i][strl] = 0;
 	}
 
-	newData->timeout = luaL_checkinteger(L, 3);
+	newData->timeout = luaL_checkinteger(L, 4);
 
 	QueueUserWorkItem(_TCP_SEND_WORKER, newData, WT_EXECUTELONGFUNCTION);
 
