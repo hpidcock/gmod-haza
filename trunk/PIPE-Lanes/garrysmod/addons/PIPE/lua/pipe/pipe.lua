@@ -7,12 +7,12 @@ include("pipe_sh.lua");
 require("threadsafesockets");
 require("glon");
 
-const_JoinCmdDelay = 5;
-const_UpdateInterval = 0.2;
-const_BulkSendCount = 64;
+const_JoinCmdDelay = 10;
+const_UpdateInterval = 0.3;
+const_BulkSendCount = 32;
 const_SingularLimit = 16;
-const_PlayersPerThread = 2;
-const_TCPSendTimeOut = 200;
+const_PlayersPerThread = 3;
+const_TCPSendTimeOut = 500;
 const_MaxPlayers = MaxPlayers();
 
 function PIPE.Msg(s)
@@ -26,6 +26,7 @@ PIPE.Net.Connections = {};
 PIPE.Net.Server = tcplisten(const_ServerIP, const_BindPort, const_MaxPlayers);
 	
 PIPE.Msg("PIPE: Server Bound.");
+hook.Call("PipeReady", GAMEMODE);
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 // Multithreaded Sending
@@ -106,12 +107,22 @@ function PIPE.Net.DisconnectPlayer(ply)
 end
 hook.Add("PlayerDisconnected", "PIPE-PlayerDisconnected", PIPE.Net.DisconnectPlayer);
 
+function PIPE.Net.RandomPayLoad()
+	local payload = "";
+
+	for i=1,256 do
+		payload = payload .. tostring(math.random(0, 9));
+	end
+
+	return payload;
+end
+
 function PIPE.Net.SocketListener()
 	local cl = tcpaccept(PIPE.Net.Server);
 	
 	if(!cl || cl == -1) then return; end
 	
-	local auth = tcprecv(cl, 2000);
+	local auth = tcprecv(cl, 1000);
 	
 	if(!PIPE.Net.Connections[auth]) then tcpclose(cl); return; end
 	
@@ -119,11 +130,29 @@ function PIPE.Net.SocketListener()
 	
 	PIPE.Net.Connections[auth].PIPE.SOCK = cl;
 	
-	PIPE.Net.Send(PIPE_NETWORKVAR, PIPE.NetVar.FullUpdatePackets(), {PIPE.Net.Connections[auth].PIPE});
+	PIPE.Net.Send(PIPE_SPEEDTEST, {glon.encode({Time=CurTime(), PayLoad=PIPE.Net.RandomPayLoad()}) .. "\n"}, {PIPE.Net.Connections[auth].PIPE});
 	
 	PIPE.Msg("PIPE: Player PIPE Connected - AuthKey recv " .. PIPE.Net.Connections[auth].PIPE.AUTHKEY .. " " .. PIPE.Net.Connections[auth].PIPE.STEAMID);
 end
 hook.Add("Think", "PIPE-Acceptor", PIPE.Net.SocketListener);
+
+function PIPE.Net.SpeedCmd(ply, cmd, args)
+	ply.PIPE.SPEED = tonumber(args[1])
+	
+	if(ply.PIPE.SPEED > 1300) then
+		PIPE.Net.Send(PIPE_NETWORKVAR, PIPE.NetVar.FullUpdatePackets(const_BulkSendCount), {ply.PIPE});
+		PIPE.Msg("PIPE: Player " .. ply:Nick() .. " is on Broadband.");
+	else
+		local tbl = PIPE.NetVar.FullUpdatePackets(const_BulkSendCount)
+		local time = 0
+		for _, v in pairs(tbl) do
+			timer.Simple(time, PIPE.Net.Send, PIPE_NETWORKVAR, {v}, {ply.PIPE});
+			time = time + 1
+		end
+		PIPE.Msg("PIPE: Player " .. ply:Nick() .. " is on DialUp.");
+	end
+end
+concommand.Add("pipe_speed", PIPE.Net.SpeedCmd)
 
 function PIPE.Net.Shutdown()
 	tcpclose(PIPE.Net.Server);
@@ -177,7 +206,7 @@ function PIPE.NetVar.Sender()
 end
 hook.Add("Think", "PIPE-SenderThink", PIPE.NetVar.Sender);
 
-function PIPE.NetVar.FullUpdatePackets()
+function PIPE.NetVar.FullUpdatePackets(bulkSendCount)
 	local ret = {};
 	local bulkTemp = {};
 	
@@ -187,7 +216,7 @@ function PIPE.NetVar.FullUpdatePackets()
 		else
 			bulkTemp[k] = v;
 			
-			if(table.Count(bulkTemp) >= const_BulkSendCount) then
+			if(table.Count(bulkTemp) >= bulkSendCount) then
 				table.insert(ret, glon.encode(bulkTemp) .. "\n");
 				bulkTemp = {};
 			end

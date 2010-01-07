@@ -1,10 +1,17 @@
 // Authour: Haza55
-const_ServerIP = "202.125.36.171";
+const_ServerIP = "192.168.1.3";
 const_BindPort = 27080;
 
-PIPE_NETWORKVAR 	= 1;
-PIPE_USERMESSAGE 	= 2;
-PIPE_DATASTREAM 	= 3;
+PIPE_SPEEDTEST		= 1;
+PIPE_NETWORKVAR 	= 2;
+PIPE_USERMESSAGE 	= 3;
+PIPE_DATASTREAM 	= 4;
+
+PIPE_TYPES = {};
+PIPE_TYPES[PIPE_SPEEDTEST] = "PIPE_SPEEDTEST";
+PIPE_TYPES[PIPE_NETWORKVAR] = "PIPE_NETWORKVAR";
+PIPE_TYPES[PIPE_USERMESSAGE] = "PIPE_USERMESSAGE";
+PIPE_TYPES[PIPE_DATASTREAM] = "PIPE_DATASTREAM";
 
 PIPE = {};
 PIPE.Net = {};
@@ -65,12 +72,12 @@ function meta:SetNetworkedVar(var, val)
 
 	local ei = self:EntIndex();
 	PIPE.NetVar.Vars[ei] = PIPE.NetVar.Vars[ei] or {};
-	PIPE.NetVar.Proxies[self] = PIPE.NetVar.Proxies[self] or {};
+	PIPE.NetVar.Proxies[ei] = PIPE.NetVar.Proxies[ei] or {};
 	
-	if(PIPE.NetVar.Vars[ei][var] == val) then return; end
+	if(PIPE.NetVar.Vars[ei][var] == val && type(val) != "table") then return; end
 	
-	if(type(PIPE.NetVar.Proxies[self][var]) == "function") then
-		pcall(PIPE.NetVar.Proxies[self][var], self, var, PIPE.NetVar.Vars[ei][var], val);
+	if(type(PIPE.NetVar.Proxies[ei][var]) == "function") then
+		pcall(PIPE.NetVar.Proxies[ei][var], self, var, PIPE.NetVar.Vars[ei][var], val);
 	end
 	
 	PIPE.NetVar.Vars[ei][var] = val;
@@ -86,8 +93,9 @@ function meta:SetNetworkedVarProxy(var, func)
 		var = string.lower(var);
 	end
 
-	PIPE.NetVar.Proxies[self] = PIPE.NetVar.Proxies[self] or {};
-	PIPE.NetVar.Proxies[self][var] = func;
+	local ei = self:EntIndex();
+	PIPE.NetVar.Proxies[ei] = PIPE.NetVar.Proxies[ei] or {};
+	PIPE.NetVar.Proxies[ei][var] = func;
 end
 
 function meta:GetNetworkedAngle(var, def)
@@ -249,32 +257,32 @@ function GetGlobalVar(var)
 	return Entity(0):GetNetworkedVar(var);
 end
 
-function GetGlobalAngle(var)
-	return Entity(0):GetNetworkedAngle(var);
+function GetGlobalAngle(var, def)
+	return Entity(0):GetNetworkedAngle(var, def);
 end
 
-function GetGlobalBool(var)
-	return Entity(0):GetNetworkedBool(var);
+function GetGlobalBool(var, def)
+	return Entity(0):GetNetworkedBool(var, def);
 end
 
-function GetGlobalEntity(var)
-	return Entity(0):GetNetworkedEntity(var);
+function GetGlobalEntity(var, def)
+	return Entity(0):GetNetworkedEntity(var, def);
 end
 
-function GetGlobalFloat(var)
-	return Entity(0):GetNetworkedFloat(var);
+function GetGlobalFloat(var, def)
+	return Entity(0):GetNetworkedFloat(var, def);
 end
 
-function GetGlobalInt(var)
-	return Entity(0):GetNetworkedInt(var);
+function GetGlobalInt(var, def)
+	return Entity(0):GetNetworkedInt(var, def);
 end
 
-function GetGlobalString(var)
-	return Entity(0):GetNetworkedString(var);
+function GetGlobalString(var, def)
+	return Entity(0):GetNetworkedString(var, def);
 end
 
-function GetGlobalVector(var)
-	return Entity(0):GetNetworkedVector(var);
+function GetGlobalVector(var, def)
+	return Entity(0):GetNetworkedVector(var, def);
 end
 
 function SetGlobalAngle(var, val)
