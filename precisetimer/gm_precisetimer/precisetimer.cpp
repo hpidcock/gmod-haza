@@ -24,7 +24,7 @@ public:
 		LARGE_INTEGER end;
 		QueryPerformanceCounter(&end);
 
-		return (double)((end.QuadPart - m_iStart.QuadPart) / m_iFrequency.QuadPart);
+		return (double)((end.QuadPart - m_iStart.QuadPart) / (double)m_iFrequency.QuadPart);
 	};
 
 private:
