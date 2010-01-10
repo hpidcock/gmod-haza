@@ -24,7 +24,7 @@ public:
 		LARGE_INTEGER end;
 		QueryPerformanceCounter(&end);
 
-		return (double)((end.QuadPart - m_iStart.QuadPart) / (double)m_iFrequency.QuadPart);
+		return (double)((end.QuadPart - m_iStart.QuadPart) / m_iFrequency.QuadPart);
 	};
 
 private:
@@ -45,6 +45,17 @@ LUA_FUNCTION(CPreciseTimer_New)
 	mt->UnReference();
 
 	return 1;
+}
+
+LUA_FUNCTION(CPreciseTimer_Delete)
+{
+	G->CheckType(1, CPreciseTimer_T);
+
+	CPreciseTimer *timer = (CPreciseTimer *)G->GetUserData(1);
+
+	delete timer;
+
+	return 0;
 }
 
 LUA_FUNCTION(CPreciseTimer_Reset)
@@ -78,6 +89,7 @@ int Init(lua_State* L)
 			__index->SetMember("Time", CPreciseTimer_Time);
 		mt->SetMember("__index", __index);
 		__index->UnReference();
+		mt->SetMember("__gc", CPreciseTimer_Delete);
 	mt->UnReference();
 
 	G->SetGlobal("CPreciseTimer", CPreciseTimer_New);
