@@ -15,6 +15,9 @@ PIPE.Net.Connection = nil;
 PIPE.Net.AuthKey = nil;
 PIPE.Net.Connects = 0;
 
+local bit_lshift = function(a, b) return a * (2 ^ b) end
+local bit_rshift = function(a, b) return math.floor(a / (2 ^ b)) end
+
 local netDebug = CreateClientConVar( "pipe_debug", "0", false, false );
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -54,6 +57,7 @@ end
 
 function PIPE.Net.RecvJoinCmd(bf)
     PIPE.Net.AuthKey = bf:ReadString();
+	const_ServerIP = bf:ReadString();
 	PIPE.Net.Connect();
 end
 usermessage.Hook("PIPE-DemandConnect", PIPE.Net.RecvJoinCmd);
@@ -64,7 +68,7 @@ function PIPE.Net.Receiver()
 	
 	if(PIPE.Net.NextRecv > CurTime()) then return; end
 	
-	local packet, err = PIPE.Net.Connection:receive();
+	local packet, err = PIPE.Net.Connection:receive(3);
 	
 	if(!packet) then
 		PIPE.Net.NextRecv = CurTime() + 0.1;
@@ -76,7 +80,30 @@ function PIPE.Net.Receiver()
 	end
 	
 	if(string.len(packet) == 0) then return; end
+	
+	local highSizeByte = string.byte(packet);
+	packet = string.Right(packet, string.len(packet) - 1);
+	local midSizeByte = string.byte(packet);
+	packet = string.Right(packet, string.len(packet) - 1);
+	local lowSizeByte = string.byte(packet);
+	packet = string.Right(packet, string.len(packet) - 1);
 
+	local sizeToRead = bit_lshift(highSizeByte, 16) + bit_lshift(midSizeByte, 8) + lowSizeByte;
+	sizeToRead = sizeToRead - 0x10101;
+	
+	local packet, err = PIPE.Net.Connection:receive(sizeToRead);
+	
+	if(!packet) then
+		PIPE.Net.NextRecv = CurTime() + 0.1;
+		if(err == "closed") then
+			print("PIPE: Lost connection, reconnecting...");
+			PIPE.Net.Connect();
+		end
+		return; 
+	end
+	
+	if(string.len(packet) == 0) then return; end
+	
 	local typ = string.byte(packet);
 	
 	if(netDebug:GetBool()) then print("PIPE: Incoming msg: size " .. string.len(packet) .. " bytes. type " .. PIPE_TYPES[typ]); end
@@ -85,11 +112,19 @@ function PIPE.Net.Receiver()
 	
 	packet = string.Right(packet, string.len(packet) - 1);
 	
-	local b, tbl = pcall(glon.decode, packet);
+	local b, data = pcall(LibCompress.DecompressLZW, packet);
+	
+	if(!b) then
+		print(data);
+		if(netDebug:GetBool()) then print("PIPE: Bad Packet: " .. tostring(packet)); end
+		return;
+	end
+	
+	local b, tbl = pcall(glon.decode, data);
 	
 	if(!b) then
 		print(tbl);
-		if(netDebug:GetBool()) then print("PIPE: Bad Data: " .. tostring(packet)); end
+		if(netDebug:GetBool()) then print("PIPE: Bad Data: " .. tostring(data)); end
 		return;
 	end
 	
@@ -142,7 +177,7 @@ hook.Add("HUDPaint", "PIPE-Debug", function()
 	if(GetConVarNumber("net_graph") == 0) then return end
 	
 	surface.SetFont("PIPEFont4")
-	local screenx = surface.GetTextSize("fps:  435  ping: 533 ms lerp 112.3 ms   0/0") + 5
+	local screenx = surface.GetTextSize("fps:  435  ping: 533 ms lerp 112.3 ms0/0")
 	local w, h = surface.GetTextSize("pipe-in:          ")
 	local y = ScrH() - 17
 	

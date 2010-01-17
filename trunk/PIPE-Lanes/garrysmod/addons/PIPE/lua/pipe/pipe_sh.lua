@@ -1,5 +1,17 @@
 // Authour: Haza55
-const_ServerIP = "192.168.1.3";
+include("libcompress.lua")
+if SERVER then
+	AddCSLuaFile("libcompress.lua")
+end
+
+if SERVER then
+	const_ServerIP = GetConVar("ip"):GetString();
+	if(const_ServerIP == "localhost") then
+		const_ServerIP = "127.0.0.1";
+	end
+else
+	const_ServerIP = "127.0.0.1";
+end
 const_BindPort = 27080;
 
 PIPE_SPEEDTEST		= 1;
@@ -130,7 +142,7 @@ function meta:GetNetworkedString(var, def)
 	if(!str) then
 		return def;
 	end
-	return string.Replace(tostring(self:GetNetworkedVar(var)), "|n|", "\n");
+	return str;
 end
 
 function meta:GetNetworkedVector(var, def)
@@ -170,7 +182,7 @@ function meta:GetNWString(var, def)
 	if(!str) then
 		return def;
 	end
-	return string.Replace(tostring(self:GetNetworkedVar(var)), "|n|", "\n");
+	return str;
 end
 
 function meta:GetNWVector(var, def)
@@ -208,7 +220,7 @@ function meta:SetNetworkedString(var, val)
 		self:SetNetworkedVar(var, nil);
 		return;
 	end
-	self:SetNetworkedVar(var, string.Replace(tostring(val), "\n", "|n|"));
+	self:SetNetworkedVar(var, val);
 end
 
 function meta:SetNetworkedVector(var, val)
@@ -241,7 +253,7 @@ function meta:SetNWString(var, val)
 		self:SetNetworkedVar(var, nil);
 		return;
 	end
-	self:SetNetworkedVar(var, string.Replace(tostring(val), "\n", "|n|"));
+	self:SetNetworkedVar(var, val);
 end
 
 function meta:SetNWVector(var, val)
