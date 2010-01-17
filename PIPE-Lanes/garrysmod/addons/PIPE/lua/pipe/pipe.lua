@@ -15,6 +15,9 @@ const_PlayersPerThread = 3;
 const_TCPSendTimeOut = 500;
 const_MaxPlayers = MaxPlayers();
 
+local bit_lshift = function(a, b) return a * (2 ^ b) end
+local bit_rshift = function(a, b) return math.floor(a / (2 ^ b)) end
+
 function PIPE.Msg(s)
 	print(s);
 	ServerLog(s);
@@ -39,6 +42,11 @@ function PIPE.Net.Send(typ, packets, clients)
 	
 	for k, v in pairs(packets) do
 		packets[k] = string.char(typ) .. v;
+		local len = string.len(packets[k]) + 0x10101;
+		local highByte = bit_rshift(len, 16);
+		local midByte = bit_rshift(len - bit_lshift(highByte, 16), 8);
+		local lowByte = len - bit_lshift(highByte, 16) - bit_lshift(midByte, 8);
+		packets[k] = string.char(highByte) .. string.char(midByte) .. string.char(lowByte) .. packets[k];
 	end
 	
 	local sockets = {};
@@ -79,6 +87,7 @@ function PIPE.Net.SendJoinCmd(ply)
 
 	umsg.Start("PIPE-DemandConnect", ply);
 		umsg.String(ply.PIPE.AUTHKEY);
+		umsg.String(const_ServerIP);
 	umsg.End();
  
 	ply.PIPE.CONNECTCMDSENT = true;
@@ -130,7 +139,7 @@ function PIPE.Net.SocketListener()
 	
 	PIPE.Net.Connections[auth].PIPE.SOCK = cl;
 	
-	PIPE.Net.Send(PIPE_SPEEDTEST, {glon.encode({Time=CurTime(), PayLoad=PIPE.Net.RandomPayLoad()}) .. "\n"}, {PIPE.Net.Connections[auth].PIPE});
+	PIPE.Net.Send(PIPE_SPEEDTEST, {LibCompress.CompressLZW(glon.encode({Time=CurTime(), PayLoad=PIPE.Net.RandomPayLoad()}))}, {PIPE.Net.Connections[auth].PIPE});
 	
 	PIPE.Msg("PIPE: Player PIPE Connected - AuthKey recv " .. PIPE.Net.Connections[auth].PIPE.AUTHKEY .. " " .. PIPE.Net.Connections[auth].PIPE.STEAMID);
 end
@@ -191,7 +200,7 @@ function PIPE.NetVar.Sender()
 	if(!PIPE.NetVar.ChangesMade || table.Count(PIPE.NetVar.Changes) == 0) then return; end
 	PIPE.NetVar.ChangesMade = false;
 
-	local encoded = glon.encode(PIPE.NetVar.Changes) .. "\n";
+	local encoded = LibCompress.CompressLZW(glon.encode(PIPE.NetVar.Changes));
 	
 	local clients = {};
 	for k, v in pairs(PIPE.Net.Connections) do
@@ -212,19 +221,19 @@ function PIPE.NetVar.FullUpdatePackets(bulkSendCount)
 	
 	for k, v in pairs(PIPE.NetVar.Vars) do
 		if(Entity(k):IsWorld() or Entity(k):IsPlayer() or table.Count(v) >= const_SingularLimit) then
-			table.insert(ret, glon.encode({[k]=v}) .. "\n");
+			table.insert(ret, LibCompress.CompressLZW(glon.encode({[k]=v})));
 		else
 			bulkTemp[k] = v;
 			
 			if(table.Count(bulkTemp) >= bulkSendCount) then
-				table.insert(ret, glon.encode(bulkTemp) .. "\n");
+				table.insert(ret, LibCompress.CompressLZW(glon.encode(bulkTemp)));
 				bulkTemp = {};
 			end
 		end
 	end
 	
 	if(table.Count(bulkTemp) != 0) then
-		table.insert(ret, glon.encode(bulkTemp) .. "\n");
+		table.insert(ret, LibCompress.CompressLZW(glon.encode(bulkTemp)));
 	end
 	
 	return ret;
