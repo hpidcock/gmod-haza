@@ -68,7 +68,7 @@ function PIPE.Net.Receiver()
 	
 	if(PIPE.Net.NextRecv > CurTime()) then return; end
 	
-	local packet, err = PIPE.Net.Connection:receive(3);
+	local packet, err = PIPE.Net.Connection:receive(2);
 	
 	if(!packet) then
 		PIPE.Net.NextRecv = CurTime() + 0.1;
@@ -83,13 +83,11 @@ function PIPE.Net.Receiver()
 	
 	local highSizeByte = string.byte(packet);
 	packet = string.Right(packet, string.len(packet) - 1);
-	local midSizeByte = string.byte(packet);
-	packet = string.Right(packet, string.len(packet) - 1);
 	local lowSizeByte = string.byte(packet);
 	packet = string.Right(packet, string.len(packet) - 1);
 
-	local sizeToRead = bit_lshift(highSizeByte, 16) + bit_lshift(midSizeByte, 8) + lowSizeByte;
-	sizeToRead = sizeToRead - 0x10101;
+	local sizeToRead = bit_lshift(highSizeByte, 8) + lowSizeByte;
+	sizeToRead = sizeToRead - 0x101;
 	
 	local packet, err = PIPE.Net.Connection:receive(sizeToRead);
 	
@@ -106,8 +104,6 @@ function PIPE.Net.Receiver()
 	
 	local typ = string.byte(packet);
 	
-	if(netDebug:GetBool()) then print("PIPE: Incoming msg: size " .. string.len(packet) .. " bytes. type " .. PIPE_TYPES[typ]); end
-	
 	PIPE.LastInSize = string.len(packet);
 	
 	packet = string.Right(packet, string.len(packet) - 1);
@@ -119,6 +115,8 @@ function PIPE.Net.Receiver()
 		if(netDebug:GetBool()) then print("PIPE: Bad Packet: " .. tostring(packet)); end
 		return;
 	end
+	
+	if(netDebug:GetBool()) then print("PIPE: Incoming msg: sz-comp " .. tostring(string.len(packet)) .. " bytes. size " .. tostring(string.len(data)) .. " bytes. type " .. tostring(PIPE_TYPES[typ])); end
 	
 	local b, tbl = pcall(glon.decode, data);
 	
@@ -156,17 +154,59 @@ function PIPE.NetVar.ResetEntity(bf)
 end
 usermessage.Hook("PIPE-ResetEnt", PIPE.NetVar.ResetEntity);
 
+function PIPE.NetVar.DeepTableMerge(tbl, changes)
+	local newTbl = tbl or {};
+	for k, v in pairs(changes) do
+		if(v == PIPE_VALUE_NIL) then
+			v = nil;
+		end
+		
+		if(type(v) == "table") then
+			newTbl[k] = PIPE.NetVar.DeepTableMerge(newTbl[k], v);
+		else
+			newTbl[k] = v;
+		end
+	end
+	return newTbl;
+end
+
+function PIPE.NetVar.DeepTableCopy(oldtable, newtable)
+	local oldtable = oldtable or {};
+	for k, v in pairs(oldtable) do
+		if(type(v) == "table") then
+			newtable[k] = {};
+			PIPE.NetVar.DeepTableCopy(v, newtable[k]);
+		else
+			newtable[k] = v;
+		end
+	end
+end
+
 function PIPE.NetVar.MergeVarTable(tbl)
 	for k, v in pairs(tbl) do
 		for c, j in pairs(v) do
 			PIPE.NetVar.Vars[k] = PIPE.NetVar.Vars[k] or {};
 			PIPE.NetVar.Proxies[k] = PIPE.NetVar.Proxies[k] or {};
 			
-			if(type(PIPE.NetVar.Proxies[k][c]) == "function") then
+			if(j == PIPE_VALUE_NIL) then
+				j = nil;
+			end
+			
+			if(type(PIPE.NetVar.Proxies[k][c]) == "function" && type(j) != "table") then
 				pcall(PIPE.NetVar.Proxies[k][c], Entity(k), c, PIPE.NetVar.Vars[k][c], j);
 			end
 			
-			PIPE.NetVar.Vars[k][c] = j;
+			if(type(j) == "table") then
+				local newTable = {};
+				PIPE.NetVar.DeepTableCopy(PIPE.NetVar.Vars[k][c], newTable);
+				newTable = PIPE.NetVar.DeepTableMerge(newTable, j);
+				if(type(PIPE.NetVar.Proxies[k][c]) == "function") then
+					pcall(PIPE.NetVar.Proxies[k][c], Entity(k), c, PIPE.NetVar.Vars[k][c], newTable);
+				end
+				PIPE.NetVar.Vars[k][c] = newTable;
+			else
+				PIPE.NetVar.Vars[k][c] = j;
+			end
 		end
 	end
 end
