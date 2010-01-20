@@ -25,6 +25,8 @@ PIPE_TYPES[PIPE_NETWORKVAR] = "PIPE_NETWORKVAR";
 PIPE_TYPES[PIPE_USERMESSAGE] = "PIPE_USERMESSAGE";
 PIPE_TYPES[PIPE_DATASTREAM] = "PIPE_DATASTREAM";
 
+PIPE_VALUE_NIL = "\24\27";
+
 PIPE = {};
 PIPE.Net = {};
 PIPE.NetVar = {};
@@ -50,6 +52,36 @@ if SERVER then
 	PIPE.NetVar.ChangesMade = false;
 end
 PIPE.NetVar.Proxies = {};
+
+function PIPE.NetVar.DeepTableCompare(old, new)
+	if(new == nil) then
+		return {};
+	elseif(old == nil) then
+		return new;
+	end
+
+	local changes = {};
+	for k, v in pairs(old) do
+		if(v != new[k]) then
+			if(new[k] == nil) then
+				changes[k] = PIPE_VALUE_NIL;
+			else
+				changes[k] = new[k];
+			end
+		end
+		if(type(v) == "table" && type(new[k]) == "table") then
+			changes[k] = PIPE.NetVar.DeepTableCompare(v, new[k]);
+		end
+	end
+	
+	for k, v in pairs(new) do
+		if(old[k] == nil) then
+			changes[k] = new[k];
+		end
+	end
+	
+	return changes;
+end
 
 local meta = FindMetaTable("Entity");
 
@@ -81,6 +113,10 @@ function meta:SetNetworkedVar(var, val)
 			val = -1;
 		end
 	end
+	
+	if(type(val) == "table") then
+		val = table.Copy(val);
+	end
 
 	local ei = self:EntIndex();
 	PIPE.NetVar.Vars[ei] = PIPE.NetVar.Vars[ei] or {};
@@ -92,12 +128,23 @@ function meta:SetNetworkedVar(var, val)
 		pcall(PIPE.NetVar.Proxies[ei][var], self, var, PIPE.NetVar.Vars[ei][var], val);
 	end
 	
-	PIPE.NetVar.Vars[ei][var] = val;
 	if SERVER then
-	PIPE.NetVar.Changes[ei] = PIPE.NetVar.Changes[ei] or {};
-	PIPE.NetVar.Changes[ei][var] = val; 
-	PIPE.NetVar.ChangesMade = true;
+		local changes = val;
+		
+		if(type(val) == "table") then
+			changes = PIPE.NetVar.DeepTableCompare(PIPE.NetVar.Vars[ei][var], val);
+		end
+		
+		if(val == nil) then
+			changes = PIPE_VALUE_NIL;
+		end
+		
+		PIPE.NetVar.Changes[ei] = PIPE.NetVar.Changes[ei] or {};
+		PIPE.NetVar.Changes[ei][var] = changes;
+		PIPE.NetVar.ChangesMade = true;
 	end
+	
+	PIPE.NetVar.Vars[ei][var] = val;
 end
 
 function meta:SetNetworkedVarProxy(var, func)

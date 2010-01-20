@@ -42,11 +42,10 @@ function PIPE.Net.Send(typ, packets, clients)
 	
 	for k, v in pairs(packets) do
 		packets[k] = string.char(typ) .. v;
-		local len = string.len(packets[k]) + 0x10101;
-		local highByte = bit_rshift(len, 16);
-		local midByte = bit_rshift(len - bit_lshift(highByte, 16), 8);
-		local lowByte = len - bit_lshift(highByte, 16) - bit_lshift(midByte, 8);
-		packets[k] = string.char(highByte) .. string.char(midByte) .. string.char(lowByte) .. packets[k];
+		local len = string.len(packets[k]) + 0x101;
+		local highByte = bit_rshift(len, 8);
+		local lowByte = len - bit_lshift(highByte, 8);
+		packets[k] = string.char(highByte) .. string.char(lowByte) .. packets[k];
 	end
 	
 	local sockets = {};
