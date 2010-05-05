@@ -104,10 +104,10 @@ int tcpsend(lua_State* L)
 
 	AutoUnRef data = g_Lua->GetObject(1);
 
-	data->Push();
 	AutoUnRef table = g_Lua->GetGlobal("table");
 	AutoUnRef tableCount = table->GetMember("Count");
 	tableCount->Push();
+	data->Push();
 	g_Lua->Call(1, 1);
 
 	int datacount = g_Lua->GetNumber();
@@ -131,8 +131,8 @@ int tcpsend(lua_State* L)
 
 	AutoUnRef socks = g_Lua->GetObject(2);
 	
-	socks->Push();
 	tableCount->Push();
+	socks->Push();
 	g_Lua->Call(1, 1);
 
 	int sockcount = g_Lua->GetNumber();
