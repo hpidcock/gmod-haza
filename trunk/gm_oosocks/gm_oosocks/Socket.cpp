@@ -192,14 +192,17 @@ int Socket::sendln(std::string& msg)
 
 std::string Socket::recv(int len, int flags)
 {
-	WSAPOLLFD poll;
-	memset(&poll, NULL, sizeof(WSAPOLLFD));
-	poll.fd = sockfd;
-	poll.events = POLLRDNORM;
+	fd_set read;
+	memset(&read, NULL, sizeof(fd_set));
+	FD_SET(sockfd, &read);
 
-	WSAPoll(&poll, 1, timeout);
+	timeval t;
+	t.tv_sec = 0;
+	t.tv_usec = timeout;
 
-	if((poll.revents & POLLRDNORM) == 0)
+	select(0, &read, 0, 0, &t);
+
+	if(!(FD_ISSET(sockfd, &read)))
 		return "";
 
 	int count = 0;
@@ -219,14 +222,17 @@ std::string Socket::recv(int len, int flags)
 
 std::string Socket::recvln(int flags)
 {
-	WSAPOLLFD poll;
-	memset(&poll, NULL, sizeof(WSAPOLLFD));
-	poll.fd = sockfd;
-	poll.events = POLLRDNORM;
+	fd_set read;
+	memset(&read, NULL, sizeof(fd_set));
+	FD_SET(sockfd, &read);
 
-	WSAPoll(&poll, 1, timeout);
+	timeval t;
+	t.tv_sec = 0;
+	t.tv_usec = timeout;
 
-	if((poll.revents & POLLRDNORM) == 0)
+	select(0, &read, 0, 0, &t);
+
+	if(!(FD_ISSET(sockfd, &read)))
 		return "";
 
 	int count = 0;
