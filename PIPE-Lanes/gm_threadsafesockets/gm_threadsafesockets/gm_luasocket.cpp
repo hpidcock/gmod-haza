@@ -4,6 +4,8 @@
 
 #include <string>
 
+#include "AutoUnRef.h"
+
 GMOD_MODULE(Init, Shutdown);
 
 struct TcpWorkerData
@@ -100,16 +102,23 @@ int tcpsend(lua_State* L)
 	TcpWorkerData *newData = (TcpWorkerData *)malloc(sizeof(TcpWorkerData));
 	memset(newData, 0, sizeof(TcpWorkerData));
 
-	int datacount = luaL_getn(L, 1);
+	AutoUnRef data = g_Lua->GetObject(1);
 
+	data->Push();
+	AutoUnRef table = g_Lua->GetGlobal("table");
+	AutoUnRef tableCount = table->GetMember("Count");
+	tableCount->Push();
+	g_Lua->Call(1, 1);
+
+	int datacount = g_Lua->GetNumber();
+	g_Lua->Pop();
+		
 	newData->data = (char **)malloc(datacount * sizeof(char *));
 	newData->datacount = datacount;
 
 	for(int i = 0; i < datacount; i++)
 	{
-		lua_rawgeti(L, 1, i + 1);
-		const char *str = lua_tostring(L, -1);
-		lua_pop(L, 1);
+		const char *str = data->GetMemberStr((float)i);
 
 		if(str == NULL)
 			continue;
@@ -120,25 +129,30 @@ int tcpsend(lua_State* L)
 		newData->data[i][strl] = 0;
 	}
 
-	int sockcount = luaL_getn(L, 2);
+	AutoUnRef socks = g_Lua->GetObject(2);
+	
+	socks->Push();
+	tableCount->Push();
+	g_Lua->Call(1, 1);
+
+	int sockcount = g_Lua->GetNumber();
 
 	newData->socks = (SOCKET *)malloc(sockcount * sizeof(SOCKET));
 	newData->dataSocketSpecific = (char **)malloc(sockcount * sizeof(char *));
 	newData->sockcount = sockcount;
 
+	AutoUnRef socksData = g_Lua->GetObject(3);
+
 	for(int i = 0; i < sockcount; i++)
 	{
 		// Socket
-		lua_rawgeti(L, 2, i + 1);
-		SOCKET sock = lua_tointeger(L, -1);
-		lua_pop(L, 1);
+		AutoUnRef sockL = socks->GetMember((float)i);
+		SOCKET sock = sockL->GetInt();
 
 		newData->socks[i] = sock;
 
 		// Socket Specific Data
-		lua_rawgeti(L, 3, i + 1);
-		const char *str = lua_tostring(L, -1);
-		lua_pop(L, 1);
+		const char *str = socksData->GetMemberStr((float)i + 1);
 
 		if(str == NULL)
 		{
@@ -152,7 +166,7 @@ int tcpsend(lua_State* L)
 		newData->dataSocketSpecific[i][strl] = 0;
 	}
 
-	newData->timeout = luaL_checkinteger(L, 4);
+	newData->timeout = g_Lua->GetInteger(4);
 
 	QueueUserWorkItem(_TCP_SEND_WORKER, newData, WT_EXECUTELONGFUNCTION);
 
@@ -164,9 +178,9 @@ int tcplisten(lua_State* L)
 	int ret = 0;
 	__try
 	{
-		const char *ip = luaL_checkstring(L, 1);
-		int port = lua_tointeger(L, 2);
-		int backlog = lua_tointeger(L, 3);
+		const char *ip = g_Lua->GetString(1);
+		int port = g_Lua->GetInteger(2);
+		int backlog = g_Lua->GetInteger(3);
 
 		if(ip == NULL)
 			return 0;
@@ -175,7 +189,7 @@ int tcplisten(lua_State* L)
 
 		if(sock == INVALID_SOCKET)
 		{
-			lua_pushnumber(L, sock);
+			g_Lua->Push((float)sock);
 			ret = 1;
 			return 0;
 		}
@@ -200,7 +214,7 @@ int tcplisten(lua_State* L)
 		u_long argp = 1;
 		ioctlsocket(sock, FIONBIO, &argp);
 
-		lua_pushnumber(L, sock);
+		g_Lua->Push((float)sock);
 
 		ret = 1;
 	}
@@ -215,7 +229,7 @@ int tcpaccept(lua_State* L)
 	int ret = 0;
 	__try
 	{
-		SOCKET sock = lua_tointeger(L, 1);
+		SOCKET sock = g_Lua->GetInteger(1);
 
 		if(sock == INVALID_SOCKET)
 			return 0;
@@ -229,7 +243,7 @@ int tcpaccept(lua_State* L)
 			ioctlsocket(client, FIONBIO, &argp);
 		}
 
-		lua_pushnumber(L, client);
+		g_Lua->Push((float)client);
 
 		ret = 1;
 	}
@@ -241,8 +255,8 @@ int tcpaccept(lua_State* L)
 
 int tcprecv(lua_State* L)
 {	
-	SOCKET sock = lua_tointeger(L, 1);
-	int timeout = lua_tointeger(L, 2);
+	SOCKET sock = g_Lua->GetInteger(1);
+	int timeout = g_Lua->GetInteger(2);
 
 	if(sock == INVALID_SOCKET)
 		return 0;
@@ -265,7 +279,7 @@ int tcprecv(lua_State* L)
 		{
 			if(buffer == '\n')
 			{
-				lua_pushstring(L, data.c_str());
+				g_Lua->Push(data.c_str());
 				return 1;
 			}
 
@@ -276,7 +290,7 @@ int tcprecv(lua_State* L)
 		}
 	}
 
-	lua_pushstring(L, data.c_str());
+	g_Lua->Push(data.c_str());
 	return 1;
 }
 
@@ -284,7 +298,7 @@ int tcpclose(lua_State* L)
 {
 	__try
 	{
-		SOCKET sock = lua_tointeger(L, 1);
+		SOCKET sock = g_Lua->GetInteger(1);
 
 		if(sock == INVALID_SOCKET)
 			return 0;
@@ -307,18 +321,11 @@ int Init(void)
 	if(WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
 		return 0;
 
-	lua_State *L = (lua_State*)g_Lua->GetLuaState();
-
-	lua_pushcfunction(L, tcpsend);
-	lua_setglobal(L, "tcpsend");
-	lua_pushcfunction(L, tcplisten);
-	lua_setglobal(L, "tcplisten");
-	lua_pushcfunction(L, tcpaccept);
-	lua_setglobal(L, "tcpaccept");
-	lua_pushcfunction(L, tcprecv);
-	lua_setglobal(L, "tcprecv");
-	lua_pushcfunction(L, tcpclose);
-	lua_setglobal(L, "tcpclose");
+	g_Lua->SetGlobal("tcpsend", tcpsend);
+	g_Lua->SetGlobal("tcplisten", tcplisten);
+	g_Lua->SetGlobal("tcpaccept", tcpaccept);
+	g_Lua->SetGlobal("tcprecv", tcprecv);
+	g_Lua->SetGlobal("tcpclose", tcpclose);
 
 	return 0;
 }
