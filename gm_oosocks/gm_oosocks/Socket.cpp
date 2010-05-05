@@ -26,8 +26,12 @@ namespace TD
 
 Socket::Socket(int type, int domain, int protocol)
 {	
+	lastError = SOCK_ERROR::OK;
+
 	sockfd = socket(domain, type, protocol);
-	if(sockfd <= 0) error(sockfd);
+	
+	if(checkError(sockfd))
+		return;
 
 	char yes = 1;
 	setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
@@ -54,13 +58,15 @@ void Socket::bind(int port)
     memset(my_addr.sin_zero, '\0', sizeof my_addr.sin_zero);
 
     int n = ::bind(sockfd, (struct sockaddr*)&my_addr, sizeof(my_addr));
-    if(n == -1) error(n);
+    
+	checkError(n);
 }
 
 void Socket::listen(int backlog)
 {
 	int n = ::listen(sockfd, backlog);
-	if(n == -1) error(n);
+	
+	checkError(n);
 }
 
 Socket *Socket::accept()
@@ -84,7 +90,9 @@ Socket *Socket::accept()
 	socklen_t size = sizeof(their_addr);
 
 	new_fd = ::accept(sockfd, (struct sockaddr*)&their_addr, &size);
-	if(new_fd <= 0) error(new_fd);
+	
+	if(checkError(new_fd))
+		return NULL;
 
     return new Socket(new_fd, true);
 }
@@ -94,7 +102,9 @@ struct in_addr* Socket::getHostByName(const char* server)
 	struct hostent *h;
 	h = gethostbyname(server);
 	
-	if(h == 0) error(-1);
+	if(checkError(h == NULL, 1))
+		return NULL;
+
 	return (struct in_addr*)h->h_addr;	
 }
 
@@ -104,7 +114,9 @@ const char* Socket::getPeerName()
 	socklen_t size = sizeof(peer);
 	
 	int n = getpeername(sockfd, (struct sockaddr*)&peer, &size);
-	if(n == -1) throw(n);
+	
+	if(checkError(n))
+		return "";
 	
 	return inet_ntoa(peer.sin_addr);
 }
@@ -114,9 +126,16 @@ const char* Socket::getHostName()
 	char name[256];
 	
 	int n = gethostname(name, sizeof(name));
-	if(n == -1) throw(n);
 	
-	return inet_ntoa(*getHostByName(name));
+	if(checkError(n))
+		return "";
+
+	in_addr *addr = getHostByName(name);
+
+	if(addr == NULL)
+		return "";
+	
+	return inet_ntoa(*addr);
 }
 
 void Socket::connect(const char* server, int port)
@@ -126,14 +145,16 @@ void Socket::connect(const char* server, int port)
     memset(my_addr.sin_zero, '\0', sizeof(my_addr.sin_zero));
     
     int n = ::connect(sockfd, (struct sockaddr *)&my_addr, sizeof(my_addr));
-    if(n == -1) error(n);
+    
+	checkError(n);
 }
 
 int Socket::send(std::string& msg)
 {
 	int ret;
  	ret = ::send(sockfd, msg.c_str(), msg.size(), 0);
-	if(ret <= 0) error(ret);
+
+	checkError(ret, 1);
 
     return ret;
 }
@@ -147,7 +168,7 @@ int Socket::send(const char* msg)
 {
 	int ret;
  	ret = ::send(sockfd, msg, strlen(msg), 0);
-	if(ret <= 0) error(ret);
+	checkError(ret, 1);
 
     return ret;
 }
@@ -162,7 +183,8 @@ int Socket::sendAll(std::string& msg)
     while(total < len)
     {
     	n = ::send(sockfd, msg.c_str() + total, bytesleft, 0);
-        if (n <= 0) { throw(n); }
+        if(checkError(n, 1))
+			return len;
         total += n;
         bytesleft -= n;
     }
@@ -180,7 +202,8 @@ int Socket::sendAll(const char* msg)
     while(total < len)
     {
     	n = ::send(sockfd, msg + total, bytesleft, 0);
-        if (n <= 0) { throw(n); }
+        if(checkError(n, 1))
+			return len;
         total += n;
         bytesleft -= n;
     }
@@ -217,7 +240,7 @@ std::string Socket::recv(int len, int flags)
 
 	char *buffer = (char *)malloc(len + 1);
 
-	::recv(sockfd, buffer, len, 0);
+	checkError(::recv(sockfd, buffer, len, 0));
 
 	buffer[len] = '\0';
 
@@ -256,6 +279,8 @@ std::string Socket::recvln(int flags)
 		data.append(1, buffer);
 	}
 
+	checkError(count);
+
 	return data;
 }
 
@@ -270,11 +295,28 @@ void Socket::close()
 
 void Socket::shutdown(int type)
 {
-	int n;
+	::shutdown(sockfd, type);	
+}
 
-	n = ::shutdown(sockfd, type);	
-	
-	if(n != 0) error(n);
+bool Socket::checkError(int returnCode, int ok)
+{
+	if(returnCode >= ok)
+		return false;
+
+#ifdef WIN32
+	int error = WSAGetLastError();
+#else
+	int error = errno;
+#endif
+
+	lastError = SOCK_ERROR::Translate(error);
+
+	return lastError != SOCK_ERROR::OK;
+}
+
+int Socket::getLastError()
+{
+	return lastError;
 }
 
 }

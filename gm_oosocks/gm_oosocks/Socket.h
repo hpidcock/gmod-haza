@@ -38,6 +38,35 @@
 
 namespace TD
 {
+	namespace SOCK_ERROR
+	{
+		enum
+		{
+			OK = 0,
+			NOT_CONNECTED,
+			CONNECTION_REST,
+			TIMED_OUT,
+			BAD
+		};
+
+		static int Translate(int osSpec)
+		{
+#ifdef WIN32
+			static const int OS[] = {NULL, WSAENOTCONN, WSAECONNRESET, WSAETIMEDOUT};
+#else
+			static const int OS[] = {NULL, ENOTCONN, ECONNRESET, ETIMEDOUT};
+#endif
+			static const int TRANS[] = {OK, NOT_CONNECTED, CONNECTION_REST, TIMED_OUT};
+
+			for(int i = 0; i < sizeof(OS)/sizeof(int); i++)
+			{
+				if(OS[i] == osSpec)
+					return TRANS[i];
+			}
+
+			return BAD;
+		};
+	};
 
 /**
  * Simple C++ socket wrapper.
@@ -194,6 +223,8 @@ class Socket
 		 */
 		void shutdown(int type);
 
+		int getLastError();
+
 	private:
 		/**
 		 * Returns the ip of a host (DNS lookup).
@@ -205,7 +236,10 @@ class Socket
 	
 		int sockfd;
 		struct sockaddr_in my_addr;
-		void error(int code);
+		
+		int lastError;
+
+		bool checkError(int returnCode, int ok = 0);
 
 		int timeout;
 };
