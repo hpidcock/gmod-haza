@@ -133,7 +133,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="ws2_32.lib lua_shared.lib"
+				AdditionalDependencies="ws2_32.lib"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				SubSystem="2"
@@ -183,6 +183,10 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
+				RelativePath=".\AutoUnRef.h"
+				>
+			</File>
+			<File
 				RelativePath=".\GMLuaModule.h"
 				>
 			</File>
@@ -192,18 +196,6 @@
 			</File>
 			<File
 				RelativePath=".\ILuaObject.h"
-				>
-			</File>
-			<File
-				RelativePath=".\lua.h"
-				>
-			</File>
-			<File
-				RelativePath=".\luaconf.h"
-				>
-			</File>
-			<File
-				RelativePath=".\lualib.h"
 				>
 			</File>
 		</Filter>

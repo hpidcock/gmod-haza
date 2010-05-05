@@ -12,19 +12,13 @@
 
 #include "ILuaInterface.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-#include "lua.h"
-#include "lauxlib.h"
-#ifdef __cplusplus
-}
-#endif
+#undef GetObject
 
-/*
+#ifndef __GMLUAMODULE_H__
+#define __GMLUAMODULE_H__
+
 typedef struct lua_State lua_State;
 typedef int (*lua_CFunction) (lua_State *L);
-*/
 
 extern ILuaInterface* g_Lua;
 
@@ -64,3 +58,5 @@ static void Msg( char *format, ... )
 }
 
 #define LUA_FUNCTION( _function_ ) static int _function_( lua_State* )
+
+#endif // __GMLUAMODULE_H__
