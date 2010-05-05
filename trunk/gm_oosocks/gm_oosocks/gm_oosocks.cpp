@@ -7,13 +7,6 @@ GMOD_MODULE(Init, Shutdown);
 #define MT_SOCKET	"OOSock"
 #define TYPE_SOCKET 9753
 
-namespace TD
-{
-	void Socket::error(int code)
-	{
-	}
-};
-
 namespace OOSock
 {
 	LUA_FUNCTION(__new)
@@ -218,6 +211,20 @@ namespace OOSock
 		g_Lua->Push(sock->recvln().c_str());
 		return 1;
 	}
+
+	LUA_FUNCTION(GetLastError)
+	{
+		g_Lua->CheckType(1, TYPE_SOCKET);
+
+		TD::Socket *sock = static_cast<TD::Socket *>(g_Lua->GetUserData(1));
+
+		if(sock == NULL)
+			return 0;
+
+		g_Lua->Push((float)sock->getLastError());
+
+		return 1;
+	}
 };
 
 int Init(void)
@@ -242,6 +249,7 @@ int Init(void)
 		__index->SetMember("SendLine", OOSock::SendLine);
 		__index->SetMember("Receive", OOSock::Receive);
 		__index->SetMember("ReceiveLine", OOSock::ReceiveLine);
+		__index->SetMember("GetLastError", OOSock::GetLastError);
 
 		meta->SetMember("__index", __index);
 	}
@@ -250,6 +258,12 @@ int Init(void)
 	g_Lua->SetGlobal("OOSock", OOSock::__new);
 	g_Lua->SetGlobal("IPPROTO_TCP", (float)IPPROTO_TCP);
 	g_Lua->SetGlobal("IPPROTO_UDP", (float)IPPROTO_UDP);
+
+	g_Lua->SetGlobal("SCKERR_OK", (float)TD::SOCK_ERROR::OK);
+	g_Lua->SetGlobal("SCKERR_BAD", (float)TD::SOCK_ERROR::BAD);
+	g_Lua->SetGlobal("SCKERR_CONNECTION_REST", (float)TD::SOCK_ERROR::CONNECTION_REST);
+	g_Lua->SetGlobal("SCKERR_NOT_CONNECTED", (float)TD::SOCK_ERROR::NOT_CONNECTED);
+	g_Lua->SetGlobal("SCKERR_TIMED_OUT", (float)TD::SOCK_ERROR::TIMED_OUT);
 
 	return 0;
 }
