@@ -104,21 +104,14 @@ int tcpsend(lua_State* L)
 
 	AutoUnRef data = g_Lua->GetObject(1);
 
-	AutoUnRef table = g_Lua->GetGlobal("table");
-	AutoUnRef tableCount = table->GetMember("Count");
-	tableCount->Push();
-	data->Push();
-	g_Lua->Call(1, 1);
-
-	int datacount = g_Lua->GetNumber();
-	g_Lua->Pop();
+	int datacount = g_Lua->GetNumber(2);
 		
 	newData->data = (char **)malloc(datacount * sizeof(char *));
 	newData->datacount = datacount;
 
 	for(int i = 0; i < datacount; i++)
 	{
-		const char *str = data->GetMemberStr((float)i);
+		const char *str = data->GetMemberStr((float)i + 1);
 
 		if(str == NULL)
 			continue;
@@ -129,24 +122,20 @@ int tcpsend(lua_State* L)
 		newData->data[i][strl] = 0;
 	}
 
-	AutoUnRef socks = g_Lua->GetObject(2);
-	
-	tableCount->Push();
-	socks->Push();
-	g_Lua->Call(1, 1);
+	AutoUnRef socks = g_Lua->GetObject(3);
 
-	int sockcount = g_Lua->GetNumber();
+	int sockcount = g_Lua->GetNumber(4);
 
 	newData->socks = (SOCKET *)malloc(sockcount * sizeof(SOCKET));
 	newData->dataSocketSpecific = (char **)malloc(sockcount * sizeof(char *));
 	newData->sockcount = sockcount;
 
-	AutoUnRef socksData = g_Lua->GetObject(3);
+	AutoUnRef socksData = g_Lua->GetObject(5);
 
 	for(int i = 0; i < sockcount; i++)
 	{
 		// Socket
-		AutoUnRef sockL = socks->GetMember((float)i);
+		AutoUnRef sockL = socks->GetMember((float)i + 1);
 		SOCKET sock = sockL->GetInt();
 
 		newData->socks[i] = sock;
@@ -166,7 +155,7 @@ int tcpsend(lua_State* L)
 		newData->dataSocketSpecific[i][strl] = 0;
 	}
 
-	newData->timeout = g_Lua->GetInteger(4);
+	newData->timeout = g_Lua->GetInteger(6);
 
 	QueueUserWorkItem(_TCP_SEND_WORKER, newData, WT_EXECUTELONGFUNCTION);
 
