@@ -13,6 +13,10 @@
 #pragma once
 #endif
 
+#ifdef WIN32
+#undef GetObject
+#endif
+
 #include "ILuaObject.h"
 
 typedef struct lua_State lua_State;
