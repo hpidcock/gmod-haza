@@ -26,11 +26,6 @@ namespace TD
 
 Socket::Socket(int type, int domain, int protocol)
 {	
-	#ifdef WIN32 // Brain fuc*	
-		int n= WSAStartup(MAKEWORD(2, 2), &wsa_data);
-		if(n == -1) error(n);
-	#endif
-	
 	sockfd = socket(domain, type, protocol);
 	if(sockfd <= 0) error(sockfd);
 
@@ -70,6 +65,19 @@ void Socket::listen(int backlog)
 
 Socket *Socket::accept()
 {
+	fd_set read;
+	memset(&read, NULL, sizeof(fd_set));
+	FD_SET(sockfd, &read);
+
+	timeval t;
+	t.tv_sec = 0;
+	t.tv_usec = 0;
+
+	select(0, &read, 0, 0, &t);
+
+	if(!(FD_ISSET(sockfd, &read)))
+		return NULL;
+
 	int new_fd;
 	struct sockaddr_in their_addr;
 	
@@ -254,7 +262,6 @@ std::string Socket::recvln(int flags)
 void Socket::close()
 {
 	#ifdef WIN32
-		WSACleanup();
 		closesocket(sockfd);		
 	#else
 		::close(sockfd);
@@ -264,10 +271,6 @@ void Socket::close()
 void Socket::shutdown(int type)
 {
 	int n;
-	
-	#ifdef WIN32
-		WSACleanup();
-	#endif
 
 	n = ::shutdown(sockfd, type);	
 	

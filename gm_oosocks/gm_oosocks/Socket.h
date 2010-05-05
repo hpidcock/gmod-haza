@@ -208,10 +208,6 @@ class Socket
 		void error(int code);
 
 		int timeout;
-		
-		#ifdef WIN32
-			WSADATA wsa_data;
-		#endif
 };
 
 }

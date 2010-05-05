@@ -93,6 +93,9 @@ namespace OOSock
 
 		TD::Socket *newSock = sock->accept();
 
+		if(newSock == NULL)
+			return 0;
+
 		AutoUnRef meta = g_Lua->GetMetaTable(MT_SOCKET, TYPE_SOCKET);
 		g_Lua->PushUserData(meta, static_cast<void *>(newSock));
 
@@ -219,6 +222,11 @@ namespace OOSock
 
 int Init(void)
 {
+#ifdef WIN32
+	WSADATA wsa_data;
+	WSAStartup(MAKEWORD(2, 0), &wsa_data);
+#endif
+
 	AutoUnRef meta = g_Lua->GetMetaTable(MT_SOCKET, TYPE_SOCKET);
 	{
 		AutoUnRef __index = g_Lua->GetNewTable();
@@ -248,5 +256,9 @@ int Init(void)
 
 int Shutdown(void)
 {
+#ifdef WIN32
+	WSACleanup();
+#endif
+
 	return 0;
 }
