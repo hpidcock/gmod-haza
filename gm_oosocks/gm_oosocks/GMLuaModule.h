@@ -12,9 +12,6 @@
 
 #include "ILuaInterface.h"
 
-// Fuck off windows chartype defines
-#undef GetObject
-
 #ifndef __GMLUAMODULE_H__
 #define __GMLUAMODULE_H__
 
@@ -24,6 +21,7 @@ typedef int (*lua_CFunction) (lua_State *L);
 extern ILuaInterface* g_Lua;
 
 // You should place this at the top of your module
+#ifdef WIN32
 #define GMOD_MODULE( _startfunction_, _closefunction_ ) \
 	ILuaInterface* g_Lua = NULL; \
 	int _startfunction_( void );\
@@ -38,7 +36,24 @@ extern ILuaInterface* g_Lua;
 		g_Lua = NULL;\
 		_closefunction_();\
 		return 0;\
+	}
+#else
+#define GMOD_MODULE( _startfunction_, _closefunction_ ) \
+	ILuaInterface* g_Lua = NULL; \
+	int _startfunction_( void );\
+	int _closefunction_( void );\
+	extern "C" int __attribute__ ((visibility("default"))) gmod_open( ILuaInterface* i ) \
+	{ \
+		g_Lua = i;\
+		return _startfunction_();\
 	}\
+	extern "C" int __attribute__ ((visibility("default"))) gmod_close( int i ) \
+	{\
+		g_Lua = NULL;\
+		_closefunction_();\
+		return 0;\
+	}
+#endif
 
 static void Msg( char *format, ... )
 {
