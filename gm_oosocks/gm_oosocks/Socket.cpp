@@ -43,6 +43,8 @@ Socket::Socket(int type, int domain, int protocol)
 
 Socket::Socket(int new_fd, bool flag)
 {
+	lastError = SOCK_ERROR::OK;
+
 	sockfd = new_fd;
 	timeout = 0;
 }
@@ -53,6 +55,7 @@ Socket::~Socket()
 
 void Socket::bind(int port)
 {
+	lastError = SOCK_ERROR::OK;
     my_addr.sin_port = htons(port);
     my_addr.sin_addr.s_addr = INADDR_ANY;
     memset(my_addr.sin_zero, '\0', sizeof my_addr.sin_zero);
@@ -64,6 +67,7 @@ void Socket::bind(int port)
 
 void Socket::listen(int backlog)
 {
+	lastError = SOCK_ERROR::OK;
 	int n = ::listen(sockfd, backlog);
 	
 	checkError(n);
@@ -71,6 +75,7 @@ void Socket::listen(int backlog)
 
 Socket *Socket::accept()
 {
+	lastError = SOCK_ERROR::OK;
 	fd_set read;
 	memset(&read, NULL, sizeof(fd_set));
 	FD_SET(sockfd, &read);
@@ -99,6 +104,7 @@ Socket *Socket::accept()
 
 struct in_addr* Socket::getHostByName(const char* server)
 {
+	lastError = SOCK_ERROR::OK;
 	struct hostent *h;
 	h = gethostbyname(server);
 	
@@ -110,6 +116,7 @@ struct in_addr* Socket::getHostByName(const char* server)
 
 const char* Socket::getPeerName()
 {	
+	lastError = SOCK_ERROR::OK;
 	struct sockaddr_in peer;
 	socklen_t size = sizeof(peer);
 	
@@ -123,6 +130,7 @@ const char* Socket::getPeerName()
 
 const char* Socket::getHostName()
 {
+	lastError = SOCK_ERROR::OK;
 	char name[256];
 	
 	int n = gethostname(name, sizeof(name));
@@ -140,6 +148,7 @@ const char* Socket::getHostName()
 
 void Socket::connect(const char* server, int port)
 {
+	lastError = SOCK_ERROR::OK;
     my_addr.sin_port = htons(port);
     my_addr.sin_addr = *getHostByName(server);
     memset(my_addr.sin_zero, '\0', sizeof(my_addr.sin_zero));
@@ -151,6 +160,7 @@ void Socket::connect(const char* server, int port)
 
 int Socket::send(std::string& msg)
 {
+	lastError = SOCK_ERROR::OK;
 	int ret;
  	ret = ::send(sockfd, msg.c_str(), msg.size(), 0);
 
@@ -166,6 +176,7 @@ void Socket::setTimeout(unsigned int timeout)
 
 int Socket::send(const char* msg)
 {
+	lastError = SOCK_ERROR::OK;
 	int ret;
  	ret = ::send(sockfd, msg, strlen(msg), 0);
 	checkError(ret, 1);
@@ -175,6 +186,7 @@ int Socket::send(const char* msg)
 
 int Socket::sendAll(std::string& msg)
 {
+	lastError = SOCK_ERROR::OK;
 	int total = 0;
 	int len = msg.size();
     int bytesleft = len;
@@ -194,6 +206,7 @@ int Socket::sendAll(std::string& msg)
 
 int Socket::sendAll(const char* msg)
 {
+	lastError = SOCK_ERROR::OK;
 	int total = 0;
 	int len = strlen(msg);
     int bytesleft = len;
@@ -223,6 +236,7 @@ int Socket::sendln(std::string& msg)
 
 std::string Socket::recv(int len, int flags)
 {
+	lastError = SOCK_ERROR::OK;
 	fd_set read;
 	memset(&read, NULL, sizeof(fd_set));
 	FD_SET(sockfd, &read);
@@ -253,6 +267,7 @@ std::string Socket::recv(int len, int flags)
 
 std::string Socket::recvln(int flags)
 {
+	lastError = SOCK_ERROR::OK;
 	fd_set read;
 	memset(&read, NULL, sizeof(fd_set));
 	FD_SET(sockfd, &read);
@@ -286,6 +301,7 @@ std::string Socket::recvln(int flags)
 
 void Socket::close()
 {
+	lastError = SOCK_ERROR::OK;
 	#ifdef WIN32
 		closesocket(sockfd);		
 	#else
@@ -295,6 +311,7 @@ void Socket::close()
 
 void Socket::shutdown(int type)
 {
+	lastError = SOCK_ERROR::OK;
 	::shutdown(sockfd, type);	
 }
 
