@@ -173,11 +173,11 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath="..\..\linux\src\gm_oosocks.cpp"
+				RelativePath="..\linux\src\gm_oosocks.cpp"
 				>
 			</File>
 			<File
-				RelativePath="..\..\linux\src\Socket.cpp"
+				RelativePath="..\linux\src\Socket.cpp"
 				>
 			</File>
 		</Filter>
@@ -187,23 +187,23 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
-				RelativePath="..\..\linux\src\AutoUnRef.h"
+				RelativePath="..\linux\src\AutoUnRef.h"
 				>
 			</File>
 			<File
-				RelativePath="..\..\linux\src\GMLuaModule.h"
+				RelativePath="..\linux\src\GMLuaModule.h"
 				>
 			</File>
 			<File
-				RelativePath="..\..\linux\src\ILuaInterface.h"
+				RelativePath="..\linux\src\ILuaInterface.h"
 				>
 			</File>
 			<File
-				RelativePath="..\..\linux\src\ILuaObject.h"
+				RelativePath="..\linux\src\ILuaObject.h"
 				>
 			</File>
 			<File
-				RelativePath="..\..\linux\src\Socket.h"
+				RelativePath="..\linux\src\Socket.h"
 				>
 			</File>
 		</Filter>
