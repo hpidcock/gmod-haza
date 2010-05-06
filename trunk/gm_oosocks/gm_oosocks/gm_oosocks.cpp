@@ -225,6 +225,20 @@ namespace OOSock
 
 		return 1;
 	}
+
+	LUA_FUNCTION(Close)
+	{
+		g_Lua->CheckType(1, TYPE_SOCKET);
+
+		TD::Socket *sock = static_cast<TD::Socket *>(g_Lua->GetUserData(1));
+
+		if(sock == NULL)
+			return 0;
+
+		sock->close();
+
+		return 0;
+	}
 };
 
 int Init(void)
@@ -250,6 +264,7 @@ int Init(void)
 		__index->SetMember("Receive", OOSock::Receive);
 		__index->SetMember("ReceiveLine", OOSock::ReceiveLine);
 		__index->SetMember("GetLastError", OOSock::GetLastError);
+		__index->SetMember("Close", OOSock::Close);
 
 		meta->SetMember("__index", __index);
 	}
