@@ -258,7 +258,7 @@ std::string Socket::recv(int len, int flags, std::string &outAddr)
 	int count = 0;
 	char *buffer = (char *)malloc(len + 1);
 	sockaddr addr;
-	int addrSz = sizeof(sockaddr);
+	socklen_t addrSz = sizeof(sockaddr);
 
 	int n = ::recvfrom(sockfd, buffer, len, 0, &addr, &addrSz);
 
@@ -298,7 +298,7 @@ std::string Socket::recvln(int flags, std::string &outAddr)
 	std::string data = "";
 
 	sockaddr addr;
-	int addrSz = sizeof(sockaddr);
+	socklen_t addrSz = sizeof(sockaddr);
 
 	while((count = ::recvfrom(sockfd, &buffer, 1, 0, &addr, &addrSz)) == 1)
 	{
