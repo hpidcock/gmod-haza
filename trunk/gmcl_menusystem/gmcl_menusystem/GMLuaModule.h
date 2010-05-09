@@ -12,19 +12,8 @@
 
 #include "ILuaInterface.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-#include "lua.h"
-#include "lauxlib.h"
-#ifdef __cplusplus
-}
-#endif
-
-/*
 typedef struct lua_State lua_State;
 typedef int (*lua_CFunction) (lua_State *L);
-*/
 
 extern ILuaInterface* g_Lua;
 
