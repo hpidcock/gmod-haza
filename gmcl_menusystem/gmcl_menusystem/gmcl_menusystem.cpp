@@ -1,4 +1,4 @@
-#include "winlite.h"
+#include <windows.h>
 
 #include <psapi.h>
 
@@ -8,8 +8,6 @@
 #include "icvar.h"
 #include "convar.h"
 
-#include "detours.h"
-
 #include "GMLuaModule.h"
 
 #include "IMenuSystem.h"
@@ -17,10 +15,7 @@
 
 #include "Color.h"
 
-extern "C"
-{
-	#include "lua.h"
-}
+#include "AutoUnRef.h"
 
 GMOD_MODULE(Init, Shutdown);
 
@@ -28,120 +23,101 @@ static ICvar *cvar = NULL;
 static ICvar *g_pCVar = NULL;
 static IMenuSystem001 *menusystem = NULL;
 static CLuaConsoleDisplayFunc *consoledisplay = NULL;
-static lua_State *L = NULL;
 
 void CLuaConsoleDisplayFunc::ColorPrint( const Color& clr, const char *pMessage )
 {
-	if(!L)
-		return;
+	AutoUnRef table = g_Lua->GetGlobal("ConsoleTextBuffer");
 
-	lua_getglobal(L, "table");
-	lua_pushstring(L, "insert");
-	lua_gettable(L, -2);
-
-	lua_getglobal(L, "ConsoleTextBuffer");
-	if(lua_isnil(L, -1))
+	if(table->isNil())
 	{
-		lua_pop(L, 1);
-		lua_newtable(L);
-		lua_setglobal(L, "ConsoleTextBuffer");
-		lua_getglobal(L, "ConsoleTextBuffer");
+		table = g_Lua->GetNewTable();
+		g_Lua->SetGlobal("ConsoleTextBuffer", table);
 	}
 
-	lua_newtable(L);
+	AutoUnRef gTable = g_Lua->GetGlobal("table");
+	AutoUnRef gInsert = gInsert->GetMember("insert");
+	
+	gInsert->Push();
+	table->Push();
 
-	lua_pushstring(L, pMessage);
+	AutoUnRef message = g_Lua->GetNewTable();
+	message->SetMember((float)1, pMessage);
 
-	lua_rawseti(L, -2, 1);
+	AutoUnRef color = g_Lua->GetNewTable();
+	color->SetMember("r", (float)clr.r());
+	color->SetMember("g", (float)clr.g());
+	color->SetMember("b", (float)clr.b());
+	color->SetMember("a", (float)clr.a());
 
-	lua_getglobal(L, "Color");
-	lua_pushnumber(L, clr.r());
-	lua_pushnumber(L, clr.g());
-	lua_pushnumber(L, clr.b());
-	lua_pushnumber(L, clr.a());
-	lua_pcall(L, 4, 1, 0);
+	message->SetMember((float)2, color);
 
-	lua_rawseti(L, -2, 2);
+	message->Push();
 
-	lua_pcall(L, 2, 0, 0);
-
-	lua_pop(L, 1);
+	g_Lua->Call(2);
 }
 
 void CLuaConsoleDisplayFunc::Print( const char *pMessage )
 {
-	if(!L)
-		return;
+	AutoUnRef table = g_Lua->GetGlobal("ConsoleTextBuffer");
 
-	lua_getglobal(L, "table");
-	lua_pushstring(L, "insert");
-	lua_gettable(L, -2);
-
-	lua_getglobal(L, "ConsoleTextBuffer");
-	if(lua_isnil(L, -1))
+	if(table->isNil())
 	{
-		lua_pop(L, 1);
-		lua_newtable(L);
-		lua_setglobal(L, "ConsoleTextBuffer");
-		lua_getglobal(L, "ConsoleTextBuffer");
+		table = g_Lua->GetNewTable();
+		g_Lua->SetGlobal("ConsoleTextBuffer", table);
 	}
 
-	lua_newtable(L);
+	AutoUnRef gTable = g_Lua->GetGlobal("table");
+	AutoUnRef gInsert = gInsert->GetMember("insert");
+	
+	gInsert->Push();
+	table->Push();
 
-	lua_pushstring(L, pMessage);
+	AutoUnRef message = g_Lua->GetNewTable();
+	message->SetMember((float)1, pMessage);
 
-	lua_rawseti(L, -2, 1);
+	AutoUnRef color = g_Lua->GetNewTable();
+	color->SetMember("r", (float)255);
+	color->SetMember("g", (float)255);
+	color->SetMember("b", (float)255);
+	color->SetMember("a", (float)255);
 
-	lua_getglobal(L, "Color");
-	lua_pushnumber(L, 255);
-	lua_pushnumber(L, 255);
-	lua_pushnumber(L, 255);
-	lua_pushnumber(L, 255);
-	lua_pcall(L, 4, 1, 0);
+	message->SetMember((float)2, color);
 
-	lua_rawseti(L, -2, 2);
+	message->Push();
 
-	lua_pcall(L, 2, 0, 0);
-
-	lua_pop(L, 1);
+	g_Lua->Call(2);
 }
 
 void CLuaConsoleDisplayFunc::DPrint( const char *pMessage )
 {
-	if(!L)
-		return;
+	AutoUnRef table = g_Lua->GetGlobal("ConsoleTextBuffer");
 
-	lua_getglobal(L, "table");
-	lua_pushstring(L, "insert");
-	lua_gettable(L, -2);
-
-	lua_getglobal(L, "ConsoleTextBuffer");
-	if(lua_isnil(L, -1))
+	if(table->isNil())
 	{
-		lua_pop(L, 1);
-		lua_newtable(L);
-		lua_setglobal(L, "ConsoleTextBuffer");
-		lua_getglobal(L, "ConsoleTextBuffer");
+		table = g_Lua->GetNewTable();
+		g_Lua->SetGlobal("ConsoleTextBuffer", table);
 	}
 
-	lua_newtable(L);
+	AutoUnRef gTable = g_Lua->GetGlobal("table");
+	AutoUnRef gInsert = gInsert->GetMember("insert");
+	
+	gInsert->Push();
+	table->Push();
 
-	lua_pushstring(L, pMessage);
+	AutoUnRef message = g_Lua->GetNewTable();
+	message->SetMember((float)1, pMessage);
 
-	lua_rawseti(L, -2, 1);
+	AutoUnRef color = g_Lua->GetNewTable();
+	color->SetMember("r", (float)255);
+	color->SetMember("g", (float)0);
+	color->SetMember("b", (float)0);
+	color->SetMember("a", (float)255);
 
-	lua_getglobal(L, "Color");
-	lua_pushnumber(L, 255);
-	lua_pushnumber(L, 0);
-	lua_pushnumber(L, 0);
-	lua_pushnumber(L, 255);
-	lua_pcall(L, 4, 1, 0);
+	message->SetMember((float)2, color);
 
-	lua_rawseti(L, -2, 2);
+	message->Push();
 
-	lua_pcall(L, 2, 0, 0);
-
-	lua_pop(L, 1);
+	g_Lua->Call(2);
 }
 
 void DumpVTable(const char* name, const char* modulename, void *object)
@@ -181,8 +157,6 @@ int Init(void)
 
 	cvar->InstallConsoleDisplayFunc(consoledisplay);
 
-	L = (lua_State *)g_Lua->GetLuaState();
-
 	return 0;
 }
 
@@ -194,8 +168,6 @@ int Shutdown(void)
 	cvar->RemoveConsoleDisplayFunc(consoledisplay);
 
 	delete consoledisplay;
-
-	L = NULL;
 
 	return 0;
 }

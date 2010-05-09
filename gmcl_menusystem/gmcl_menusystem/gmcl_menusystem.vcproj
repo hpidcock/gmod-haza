@@ -118,7 +118,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
-				AdditionalIncludeDirectories="&quot;G:\Lust Mod\CodeBeta\src\public\tier1&quot;;&quot;G:\Lust Mod\CodeBeta\src\public\engine&quot;;&quot;G:\Lust Mod\CodeBeta\src\public\tier0&quot;;&quot;G:\Lust Mod\CodeBeta\src\public\game\server&quot;;&quot;G:\Lust Mod\CodeBeta\src\public&quot;;&quot;G:\Lust Mod\CodeBeta\src\game\server&quot;;&quot;G:\Lust Mod\CodeBeta\src\game\shared&quot;;&quot;G:\Lust Mod\CodeBeta\src\game\client&quot;;&quot;G:\Lust Mod\CodeBeta\src\common&quot;"
+				AdditionalIncludeDirectories="X:\SrcSDK\src\public\;X:\SrcSDK\src\public\tier1;X:\SrcSDK\src\game\server;X:\SrcSDK\src\game\shared;X:\SrcSDK\src\game\client;X:\SrcSDK\src\common"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_USRDLL;GM_THREADSAFESOCKETS_EXPORTS"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
@@ -137,9 +137,9 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="ws2_32.lib lua_shared.lib detours.lib tier0.lib tier1.lib kernel32.lib psapi.lib"
+				AdditionalDependencies="tier0.lib tier1.lib kernel32.lib psapi.lib"
 				LinkIncremental="1"
-				AdditionalLibraryDirectories="&quot;G:\Lust Mod\CodeBeta\src\lib\public&quot;;&quot;G:\Lust Mod\CodeBeta\src\public&quot;"
+				AdditionalLibraryDirectories="X:\SrcSDK\src\lib\public;X:\SrcSDK\src\public"
 				IgnoreDefaultLibraryNames="libcmt"
 				GenerateDebugInformation="true"
 				SubSystem="2"
