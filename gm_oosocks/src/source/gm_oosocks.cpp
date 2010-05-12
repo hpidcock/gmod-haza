@@ -1,14 +1,16 @@
 #include "GMLuaModule.h"
-#include "AutoUnRef.h"
-#include "Socket.h"
+#include "ThreadedSocket.h"
+
+#ifdef WIN32
+#undef GetObject
+#endif
 
 GMOD_MODULE(Init, Shutdown);
 
-#define MT_SOCKET	"OOSock"
-#define TYPE_SOCKET 9753
-
 namespace OOSock
 {
+	static std::vector<CThreadedSocket *> sockets;
+
 	LUA_FUNCTION(__new)
 	{
 		g_Lua->CheckType(1, GLua::TYPE_NUMBER);
@@ -21,10 +23,12 @@ namespace OOSock
 			return 0;
 		}
 
-		TD::Socket *sock = new TD::Socket(SOCK_STREAM, AF_INET, proto);
+		CThreadedSocket *sock = new CThreadedSocket(proto);
 
 		AutoUnRef meta = g_Lua->GetMetaTable(MT_SOCKET, TYPE_SOCKET);
 		g_Lua->PushUserData(meta, static_cast<void *>(sock));
+
+		sockets.push_back(sock);
 
 		return 1;
 	}
@@ -33,14 +37,39 @@ namespace OOSock
 	{
 		g_Lua->CheckType(1, TYPE_SOCKET);
 
-		TD::Socket *sock = static_cast<TD::Socket *>(g_Lua->GetUserData(1));
+		CThreadedSocket *sock = reinterpret_cast<CThreadedSocket *>(g_Lua->GetUserData(1));
 
 		if(sock == NULL)
 			return 0;
 
-		sock->close();
+		std::vector<CThreadedSocket *>::iterator itor = sockets.begin();
+		while(itor != sockets.end())
+		{
+			if((*itor) == sock)
+			{
+				sockets.erase(itor);
+				break;
+			}
+
+			itor++;
+		}
 
 		delete sock;
+
+		return 0;
+	}
+
+	LUA_FUNCTION(SetCallback)
+	{
+		g_Lua->CheckType(1, TYPE_SOCKET);
+		g_Lua->CheckType(2, GLua::TYPE_FUNCTION);
+
+		CThreadedSocket *sock = reinterpret_cast<CThreadedSocket *>(g_Lua->GetUserData(1));
+
+		if(sock == NULL)
+			return 0;
+
+		sock->SetCallback(g_Lua->GetObject(2));
 
 		return 0;
 	}
@@ -48,16 +77,17 @@ namespace OOSock
 	LUA_FUNCTION(Bind)
 	{
 		g_Lua->CheckType(1, TYPE_SOCKET);
-		g_Lua->CheckType(2, GLua::TYPE_NUMBER);
+		g_Lua->CheckType(2, GLua::TYPE_STRING);
+		g_Lua->CheckType(3, GLua::TYPE_NUMBER);
 
-		TD::Socket *sock = static_cast<TD::Socket *>(g_Lua->GetUserData(1));
+		CThreadedSocket *sock = reinterpret_cast<CThreadedSocket *>(g_Lua->GetUserData(1));
 
 		if(sock == NULL)
 			return 0;
 
-		sock->bind(g_Lua->GetInteger(2));
+		g_Lua->Push((float)sock->Bind(g_Lua->GetInteger(3), g_Lua->GetString(2)));
 
-		return 0;
+		return 1;
 	}
 
 	LUA_FUNCTION(Listen)
@@ -65,32 +95,26 @@ namespace OOSock
 		g_Lua->CheckType(1, TYPE_SOCKET);
 		g_Lua->CheckType(2, GLua::TYPE_NUMBER);
 
-		TD::Socket *sock = static_cast<TD::Socket *>(g_Lua->GetUserData(1));
+		CThreadedSocket *sock = reinterpret_cast<CThreadedSocket *>(g_Lua->GetUserData(1));
 
 		if(sock == NULL)
 			return 0;
 
-		sock->listen(g_Lua->GetInteger(2));
+		g_Lua->Push((float)sock->Listen(g_Lua->GetInteger(2)));
 
-		return 0;
+		return 1;
 	}
 
 	LUA_FUNCTION(Accept)
 	{
 		g_Lua->CheckType(1, TYPE_SOCKET);
 
-		TD::Socket *sock = static_cast<TD::Socket *>(g_Lua->GetUserData(1));
+		CThreadedSocket *sock = reinterpret_cast<CThreadedSocket *>(g_Lua->GetUserData(1));
 
 		if(sock == NULL)
 			return 0;
 
-		TD::Socket *newSock = sock->accept();
-
-		if(newSock == NULL)
-			return 0;
-
-		AutoUnRef meta = g_Lua->GetMetaTable(MT_SOCKET, TYPE_SOCKET);
-		g_Lua->PushUserData(meta, static_cast<void *>(newSock));
+		g_Lua->Push((float)sock->Accept());
 
 		return 1;
 	}
@@ -101,55 +125,12 @@ namespace OOSock
 		g_Lua->CheckType(2, GLua::TYPE_STRING);
 		g_Lua->CheckType(3, GLua::TYPE_NUMBER);
 
-		TD::Socket *sock = static_cast<TD::Socket *>(g_Lua->GetUserData(1));
+		CThreadedSocket *sock = reinterpret_cast<CThreadedSocket *>(g_Lua->GetUserData(1));
 
 		if(sock == NULL)
 			return 0;
 
-		sock->connect(g_Lua->GetString(2), g_Lua->GetInteger(3));
-
-		return 0;
-	}
-
-	LUA_FUNCTION(SetTimeout)
-	{
-		g_Lua->CheckType(1, TYPE_SOCKET);
-		g_Lua->CheckType(2, GLua::TYPE_NUMBER);
-
-		TD::Socket *sock = static_cast<TD::Socket *>(g_Lua->GetUserData(1));
-
-		if(sock == NULL)
-			return 0;
-
-		sock->setTimeout(g_Lua->GetInteger(2));
-
-		return 0;
-	}
-
-	LUA_FUNCTION(GetPeerName)
-	{
-		g_Lua->CheckType(1, TYPE_SOCKET);
-
-		TD::Socket *sock = static_cast<TD::Socket *>(g_Lua->GetUserData(1));
-
-		if(sock == NULL)
-			return 0;
-
-		g_Lua->Push(sock->getPeerName());
-
-		return 1;
-	}
-
-	LUA_FUNCTION(GetHostName)
-	{
-		g_Lua->CheckType(1, TYPE_SOCKET);
-
-		TD::Socket *sock = static_cast<TD::Socket *>(g_Lua->GetUserData(1));
-
-		if(sock == NULL)
-			return 0;
-
-		g_Lua->Push(sock->getHostName());
+		g_Lua->Push((float)sock->Connect(g_Lua->GetString(2), g_Lua->GetInteger(3)));
 
 		return 1;
 	}
@@ -159,14 +140,14 @@ namespace OOSock
 		g_Lua->CheckType(1, TYPE_SOCKET);
 		g_Lua->CheckType(2, GLua::TYPE_STRING);
 
-		TD::Socket *sock = static_cast<TD::Socket *>(g_Lua->GetUserData(1));
+		CThreadedSocket *sock = reinterpret_cast<CThreadedSocket *>(g_Lua->GetUserData(1));
 
 		if(sock == NULL)
 			return 0;
 
-		sock->sendAll(g_Lua->GetString(2));
+		g_Lua->Push((float)sock->Send(g_Lua->GetString(2)));
 
-		return 0;
+		return 1;
 	}
 
 	LUA_FUNCTION(SendLine)
@@ -174,14 +155,14 @@ namespace OOSock
 		g_Lua->CheckType(1, TYPE_SOCKET);
 		g_Lua->CheckType(2, GLua::TYPE_STRING);
 
-		TD::Socket *sock = static_cast<TD::Socket *>(g_Lua->GetUserData(1));
+		CThreadedSocket *sock = reinterpret_cast<CThreadedSocket *>(g_Lua->GetUserData(1));
 
 		if(sock == NULL)
 			return 0;
 
-		sock->sendln(g_Lua->GetString(2));
+		g_Lua->Push((float)sock->Send(std::string(g_Lua->GetString(2)) + "\n"));
 
-		return 0;
+		return 1;
 	}
 
 	LUA_FUNCTION(Receive)
@@ -189,59 +170,39 @@ namespace OOSock
 		g_Lua->CheckType(1, TYPE_SOCKET);
 		g_Lua->CheckType(2, GLua::TYPE_NUMBER);
 
-		TD::Socket *sock = static_cast<TD::Socket *>(g_Lua->GetUserData(1));
+		CThreadedSocket *sock = reinterpret_cast<CThreadedSocket *>(g_Lua->GetUserData(1));
 
 		if(sock == NULL)
 			return 0;
 
-		std::string ip = "";
-		g_Lua->Push(sock->recv(g_Lua->GetInteger(2), 0, ip).c_str());
-		g_Lua->Push(ip.c_str());
+		g_Lua->Push((float)sock->Receive(g_Lua->GetInteger(2)));
 
-		return 2;
+		return 1;
 	}
 
 	LUA_FUNCTION(ReceiveLine)
 	{
 		g_Lua->CheckType(1, TYPE_SOCKET);
 
-		TD::Socket *sock = static_cast<TD::Socket *>(g_Lua->GetUserData(1));
+		CThreadedSocket *sock = reinterpret_cast<CThreadedSocket *>(g_Lua->GetUserData(1));
 
 		if(sock == NULL)
 			return 0;
 
-		std::string ip = "";
-		g_Lua->Push(sock->recvln(0, ip).c_str());
-		g_Lua->Push(ip.c_str());
-
-		return 2;
-	}
-
-	LUA_FUNCTION(GetLastError)
-	{
-		g_Lua->CheckType(1, TYPE_SOCKET);
-
-		TD::Socket *sock = static_cast<TD::Socket *>(g_Lua->GetUserData(1));
-
-		if(sock == NULL)
-			return 0;
-
-		g_Lua->Push((float)sock->getLastError());
+		g_Lua->Push((float)sock->ReceiveLine());
 
 		return 1;
 	}
 
-	LUA_FUNCTION(Close)
+	LUA_FUNCTION(STATIC_CallbackHook)
 	{
-		g_Lua->CheckType(1, TYPE_SOCKET);
+		std::vector<CThreadedSocket *>::iterator itor = sockets.begin();
+		while(itor != sockets.end())
+		{
+			(*itor)->InvokeCallbacks();
 
-		TD::Socket *sock = static_cast<TD::Socket *>(g_Lua->GetUserData(1));
-
-		if(sock == NULL)
-			return 0;
-
-		sock->close();
-
+			itor++;
+		}
 		return 0;
 	}
 };
@@ -261,15 +222,10 @@ int Init(void)
 		__index->SetMember("Listen", OOSock::Listen);
 		__index->SetMember("Accept", OOSock::Accept);
 		__index->SetMember("Connect", OOSock::Connect);
-		__index->SetMember("SetTimeout", OOSock::SetTimeout);
-		__index->SetMember("GetPeerName", OOSock::GetPeerName);
-		__index->SetMember("GetHostName", OOSock::GetHostName);
 		__index->SetMember("Send", OOSock::Send);
 		__index->SetMember("SendLine", OOSock::SendLine);
 		__index->SetMember("Receive", OOSock::Receive);
 		__index->SetMember("ReceiveLine", OOSock::ReceiveLine);
-		__index->SetMember("GetLastError", OOSock::GetLastError);
-		__index->SetMember("Close", OOSock::Close);
 
 		meta->SetMember("__index", __index);
 	}
@@ -279,11 +235,21 @@ int Init(void)
 	g_Lua->SetGlobal("IPPROTO_TCP", (float)IPPROTO_TCP);
 	g_Lua->SetGlobal("IPPROTO_UDP", (float)IPPROTO_UDP);
 
-	g_Lua->SetGlobal("SCKERR_OK", (float)TD::SOCK_ERROR::OK);
-	g_Lua->SetGlobal("SCKERR_BAD", (float)TD::SOCK_ERROR::BAD);
-	g_Lua->SetGlobal("SCKERR_CONNECTION_REST", (float)TD::SOCK_ERROR::CONNECTION_REST);
-	g_Lua->SetGlobal("SCKERR_NOT_CONNECTED", (float)TD::SOCK_ERROR::NOT_CONNECTED);
-	g_Lua->SetGlobal("SCKERR_TIMED_OUT", (float)TD::SOCK_ERROR::TIMED_OUT);
+	g_Lua->SetGlobal("SCKERR_OK", (float)SOCK_ERROR::OK);
+	g_Lua->SetGlobal("SCKERR_BAD", (float)SOCK_ERROR::BAD);
+	g_Lua->SetGlobal("SCKERR_CONNECTION_REST", (float)SOCK_ERROR::CONNECTION_REST);
+	g_Lua->SetGlobal("SCKERR_NOT_CONNECTED", (float)SOCK_ERROR::NOT_CONNECTED);
+	g_Lua->SetGlobal("SCKERR_TIMED_OUT", (float)SOCK_ERROR::TIMED_OUT);
+
+	AutoUnRef hookSystem = g_Lua->GetGlobal("hook");
+	AutoUnRef hookAdd = hookSystem->GetMember("Add");
+	
+	hookAdd->Push();
+	g_Lua->Push("Think");
+	g_Lua->Push("__OOSOCKS_CALLBACKHOOK__");
+	g_Lua->Push(OOSock::STATIC_CallbackHook);
+
+	g_Lua->Call(3, 0);
 
 	return 0;
 }

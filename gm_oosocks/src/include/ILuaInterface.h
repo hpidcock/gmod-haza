@@ -25,7 +25,6 @@ typedef void (*VoidFunction) ( void );
 
 class LArgList;
 
-
 namespace GLua
 {
 	enum

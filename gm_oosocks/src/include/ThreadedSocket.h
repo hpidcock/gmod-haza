@@ -1,0 +1,760 @@
+/*////////////////////////////////////////////////////////////////////////	
+//  Threaded Lua Socket                                                 //	
+//                                                                      //	
+//  Copyright (c) 2010 Harry Pidcock                                    //	
+//                                                                      //	
+//  Permission is hereby granted, free of charge, to any person         //	
+//  obtaining a copy of this software and associated documentation      //	
+//  files (the "Software"), to deal in the Software without             //	
+//  restriction, including without limitation the rights to use,        //	
+//  copy, modify, merge, publish, distribute, sublicense, and/or sell   //	
+//  copies of the Software, and to permit persons to whom the           //	
+//  Software is furnished to do so, subject to the following            //	
+//  conditions:                                                         //	
+//                                                                      //	
+//  The above copyright notice and this permission notice shall be      //	
+//  included in all copies or substantial portions of the Software.     //	
+//                                                                      //	
+//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,     //	
+//  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES     //	
+//  OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND            //	
+//  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT         //	
+//  HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,        //	
+//  WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING        //	
+//  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR       //	
+//  OTHER DEALINGS IN THE SOFTWARE.                                     //	
+////////////////////////////////////////////////////////////////////////*/	
+
+#define MT_SOCKET "OOSock"
+#define TYPE_SOCKET 9753
+
+#include "GMLuaModule.h"
+#include "AutoUnRef.h"
+
+#ifdef WIN32
+	#include <Windows.h>
+#else
+	#include <sys/socket.h>
+	#include <pthread.h>
+	#include <netinet/in.h>
+	#include <arpa/inet.h>
+	#include <sys/wait.h>
+	#include <unistd.h>
+	#include <netdb.h>
+	#include <sys/types.h>
+#endif
+
+#include <string>
+#include <queue>
+
+#ifdef WIN32
+	#pragma once
+#endif
+
+#ifdef WIN32
+	typedef int socklen_t;
+#endif
+
+#ifndef __THREADEDSOCKET_H__
+#define __THREADEDSOCKET_H__
+
+class CMutexLock
+{
+public:
+	CMutexLock()
+	{
+#ifdef WIN32
+		InitializeCriticalSection(&m_Lock);
+#else
+		m_Lock = PTHREAD_MUTEX_INITIALIZER;
+#endif
+	};
+
+	void Lock(void)
+	{
+#ifdef WIN32
+		EnterCriticalSection(&m_Lock);
+#else
+		pthread_mutex_lock(&m_Lock);
+#endif
+	};
+
+	void Unlock(void)
+	{
+#ifdef WIN32
+		LeaveCriticalSection(&m_Lock);
+#else
+		pthread_mutex_unlock(&m_Lock);
+#endif
+	};
+
+private:
+	CMutexLock(const CMutexLock &other) { };
+	
+#ifdef WIN32
+	CRITICAL_SECTION m_Lock;
+#else
+	pthread_mutex_t m_Lock;
+#endif
+};
+
+namespace SOCK_ERROR
+{
+	enum
+	{
+		OK = 0,
+		NOT_CONNECTED,
+		CONNECTION_REST,
+		TIMED_OUT,
+		BAD
+	};
+
+	static int Translate(int osSpec)
+	{
+#ifdef WIN32
+		static const int OS[] = {NULL, WSAENOTCONN, WSAECONNRESET, WSAETIMEDOUT};
+#else
+		static const int OS[] = {NULL, ENOTCONN, ECONNRESET, ETIMEDOUT};
+#endif
+		static const int TRANS[] = {OK, NOT_CONNECTED, CONNECTION_REST, TIMED_OUT};
+
+		for(int i = 0; i < sizeof(OS)/sizeof(int); i++)
+		{
+			if(OS[i] == osSpec)
+				return TRANS[i];
+		}
+
+		return BAD;
+	};
+};
+
+namespace SOCK_CALL
+{
+	enum CALL
+	{
+		CONNECT = 0,
+		REC_SIZE,
+		REC_LINE,
+		SEND,
+		BIND,
+		ACCEPT,
+		LISTEN
+	};
+
+	struct SockCallResult
+	{
+		unsigned int callId;
+		CALL call;
+		int error;
+		int secondary;
+		std::string data;
+		std::string peer;
+	};
+
+	struct SockCall
+	{
+		unsigned int callId;
+		CALL call;
+		int integer;
+		std::string string;
+		std::string peer;
+	};
+};
+
+class CThreadedSocket
+{
+public:
+	CThreadedSocket(int protocol)
+	{
+		m_pCallback = NULL;
+
+		m_iCallCounter = 0;
+
+		m_iSocket = socket(SOCK_STREAM, AF_INET, protocol);
+
+		char yes = 1;
+		setsockopt(m_iSocket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+		
+		m_Addr.sin_family = SOCK_STREAM;
+
+#ifdef WIN32
+		CreateThread(NULL, NULL, &ThreadProc, this, NULL, NULL);
+#else
+		pthread_create(&m_Thread, NULL, &ThreadProc, this);
+#endif
+	};
+
+	CThreadedSocket(int sock, bool x)
+	{
+		m_pCallback = NULL;
+
+		m_iCallCounter = 0;
+
+		m_iSocket = sock;
+
+#ifdef WIN32
+		CreateThread(NULL, NULL, &ThreadProc, this, NULL, NULL);
+#else
+		pthread_create(&m_Thread, NULL, &ThreadProc, this);
+#endif
+	};
+
+	~CThreadedSocket(void)
+	{
+		if(m_pCallback != NULL)
+		{
+			m_pCallback->UnReference();
+			m_pCallback = NULL;
+		}
+
+#ifdef WIN32
+		TerminateThread(ThreadProc, NULL);
+#else
+		pthread_cancel(m_Thread);
+#endif
+
+#ifdef WIN32
+		closesocket(m_iSocket);		
+#else
+		close(m_iSocket);
+#endif
+	};
+
+	int Send(std::string data)
+	{
+		m_iCallCounter++;
+
+		SOCK_CALL::SockCall *call = new SOCK_CALL::SockCall();
+		call->callId = m_iCallCounter;
+		call->call = SOCK_CALL::SEND;
+		call->string = data;
+
+		call->peer = "";
+		call->integer = 0;
+
+		PushCall(call);
+
+		return m_iCallCounter;
+	};
+
+	int Send(std::string data, std::string peer, int peerPort)
+	{
+		m_iCallCounter++;
+
+		SOCK_CALL::SockCall *call = new SOCK_CALL::SockCall();
+		call->callId = m_iCallCounter;
+		call->call = SOCK_CALL::SEND;
+		call->string = data;
+		call->peer = peer;
+		call->integer = peerPort;
+
+		PushCall(call);
+
+		return m_iCallCounter;
+	};
+
+	int Receive(int len)
+	{
+		m_iCallCounter++;
+
+		SOCK_CALL::SockCall *call = new SOCK_CALL::SockCall();
+		call->callId = m_iCallCounter;
+		call->call = SOCK_CALL::REC_SIZE;
+		call->integer = len;
+
+		call->string = "";
+		call->peer = "";
+
+		PushCall(call);
+
+		return m_iCallCounter;
+	};
+
+	int ReceiveLine(void)
+	{
+		m_iCallCounter++;
+
+		SOCK_CALL::SockCall *call = new SOCK_CALL::SockCall();
+		call->callId = m_iCallCounter;
+		call->call = SOCK_CALL::REC_LINE;
+
+		call->integer = 0;
+		call->string = "";
+		call->peer = "";
+
+		PushCall(call);
+
+		return m_iCallCounter;
+	};
+
+	int Bind(int port, std::string ip = "")
+	{
+		m_iCallCounter++;
+
+		SOCK_CALL::SockCall *call = new SOCK_CALL::SockCall();
+		call->callId = m_iCallCounter;
+		call->call = SOCK_CALL::BIND;
+		call->integer = port;
+		call->string = ip;
+		
+		call->peer = "";
+
+		PushCall(call);
+
+		return m_iCallCounter;
+	};
+
+	int Connect(std::string ip, int port)
+	{
+		m_iCallCounter++;
+
+		SOCK_CALL::SockCall *call = new SOCK_CALL::SockCall();
+		call->callId = m_iCallCounter;
+		call->call = SOCK_CALL::CONNECT;
+		call->integer = port;
+		call->string = ip;
+		
+		call->peer = "";
+
+		PushCall(call);
+
+		return m_iCallCounter;
+	};
+
+	int Accept(void)
+	{
+		m_iCallCounter++;
+
+		SOCK_CALL::SockCall *call = new SOCK_CALL::SockCall();
+		call->callId = m_iCallCounter;
+		call->call = SOCK_CALL::ACCEPT;
+
+		call->integer = 0;
+		call->string = "";
+		call->peer = "";
+
+		PushCall(call);
+
+		return m_iCallCounter;
+	};
+
+	int Listen(int backlog)
+	{
+		m_iCallCounter++;
+
+		SOCK_CALL::SockCall *call = new SOCK_CALL::SockCall();
+		call->callId = m_iCallCounter;
+		call->call = SOCK_CALL::LISTEN;
+		call->integer = backlog;
+
+		call->string = "";
+		call->peer = "";
+
+		PushCall(call);
+
+		return m_iCallCounter;
+	};
+
+	void SetCallback(ILuaObject *callback)
+	{
+		m_pCallback = callback;
+	};
+
+	ILuaObject *GetCallback(void)
+	{
+		return m_pCallback;
+	};
+
+	void InvokeCallbacks(void)
+	{
+		if(m_pCallback == NULL)
+			return;
+
+		SOCK_CALL::SockCallResult *result = NULL;
+		while((result = PopResult()) != NULL)
+		{
+			g_Lua->Push(m_pCallback);
+			AutoUnRef meta = g_Lua->GetMetaTable(MT_SOCKET, TYPE_SOCKET);
+			g_Lua->PushUserData(meta, static_cast<void *>(this));
+			g_Lua->Push((float)result->call);
+			g_Lua->Push((float)result->callId);
+			g_Lua->Push((float)result->error);
+			if(result->call == SOCK_CALL::ACCEPT)
+			{
+				if(result->error == SOCK_ERROR::OK)
+					g_Lua->PushUserData(meta, static_cast<void *>(new CThreadedSocket(result->secondary, true)));
+				else
+					g_Lua->Push(false);
+			}
+			else
+				g_Lua->Push(result->data.c_str());
+			g_Lua->Push(result->peer.c_str());
+			g_Lua->Call(6, 0);
+			delete result;
+		}
+	};
+
+protected:
+	void PushCall(SOCK_CALL::SockCall *call)
+	{
+		m_inCalls_LOCK.Lock();
+		m_inCalls.push(call);
+		m_inCalls_LOCK.Unlock();
+	};
+
+	void PushResult(SOCK_CALL::SockCallResult *result)
+	{
+		m_outResults_LOCK.Lock();
+		m_outResults.push(result);
+		m_outResults_LOCK.Unlock();
+	};
+
+	SOCK_CALL::SockCallResult *PopResult(void)
+	{
+		SOCK_CALL::SockCallResult *result = NULL;
+		
+		m_outResults_LOCK.Lock();
+
+		if(m_outResults.size() > 0)
+		{
+			result = m_outResults.front();
+			m_outResults.pop();
+		}
+
+		m_outResults_LOCK.Unlock();
+
+		return result;
+	};
+
+	struct in_addr* GetHostByName(const char* server)
+	{
+		struct hostent *h = gethostbyname(server);
+		
+		if(h == NULL)
+			return NULL;
+
+		return (struct in_addr*)h->h_addr;	
+	}
+
+	int CheckError(int returnCode, int ok)
+	{
+		if(returnCode >= ok)
+			return SOCK_ERROR::OK;
+
+	#ifdef WIN32
+		int error = WSAGetLastError();
+	#else
+		int error = errno;
+	#endif
+
+		return SOCK_ERROR::Translate(error);
+	}
+
+
+#ifdef WIN32
+	static DWORD WINAPI ThreadProc(__in LPVOID lpParameter)
+#else
+	static void *ThreadProc(void *lpParameter)
+#endif
+	{
+		CThreadedSocket *socket = static_cast<CThreadedSocket *>(lpParameter);
+		while(true)
+		{
+			socket->m_inCalls_LOCK.Lock();
+			SOCK_CALL::SockCall *call = socket->m_inCalls.front();
+			socket->m_inCalls_LOCK.Unlock();
+
+			switch(call->call)
+			{
+			case SOCK_CALL::CONNECT:
+				{
+					socket->m_Addr.sin_port = htons(call->integer);
+					socket->m_Addr.sin_addr = *socket->GetHostByName(call->string.c_str());
+
+					memset(socket->m_Addr.sin_zero, NULL, sizeof(socket->m_Addr.sin_zero));
+	    
+					SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+					result->call = call->call;
+					result->callId = call->callId;
+
+					result->error = connect(socket->m_iSocket, (struct sockaddr *)&socket->m_Addr, sizeof(socket->m_Addr));
+
+					result->error = socket->CheckError(result->error, 0);
+
+					socket->PushResult(result);
+					
+					socket->m_inCalls_LOCK.Lock();
+					socket->m_inCalls.pop();
+					delete call;
+					socket->m_inCalls_LOCK.Unlock();
+				}
+				break;
+			case SOCK_CALL::REC_SIZE:
+				{
+					fd_set read;
+					memset(&read, NULL, sizeof(fd_set));
+					FD_SET(socket->m_iSocket, &read);
+
+					timeval t;
+					t.tv_sec = 0;
+					t.tv_usec = 0;
+
+					select(0, &read, 0, 0, &t);
+
+					if(!(FD_ISSET(socket->m_iSocket, &read)))
+						break;
+
+					SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+					result->call = call->call;
+					result->callId = call->callId;
+
+					int count = 0;
+					char *buffer = (char *)malloc(call->integer + 1);
+					sockaddr addr;
+					socklen_t addrSz = sizeof(sockaddr);
+
+					result->error = recvfrom(socket->m_iSocket, buffer, call->integer, 0, &addr, &addrSz);
+
+
+					if(result->error >= 0)
+						buffer[result->error] = '\0';
+					else
+						buffer[0] = '\0';
+
+					result->data = buffer;
+
+					free(buffer);
+
+					result->peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
+					result->peer += ":";
+					result->peer += ((sockaddr_in *)&addr)->sin_port;
+
+					result->error = socket->CheckError(result->error, 0);
+
+					socket->PushResult(result);
+					
+					socket->m_inCalls_LOCK.Lock();
+					socket->m_inCalls.pop();
+					delete call;
+					socket->m_inCalls_LOCK.Unlock();
+				}
+				break;
+			case SOCK_CALL::REC_LINE:
+				{
+					fd_set read;
+					memset(&read, NULL, sizeof(fd_set));
+					FD_SET(socket->m_iSocket, &read);
+
+					timeval t;
+					t.tv_sec = 0;
+					t.tv_usec = 0;
+
+					select(0, &read, 0, 0, &t);
+
+					if(!(FD_ISSET(socket->m_iSocket, &read)))
+						break;
+
+					SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+					result->call = call->call;
+					result->callId = call->callId;
+
+					char buffer = 0;
+
+					result->data = "";
+
+					sockaddr addr;
+					socklen_t addrSz = sizeof(sockaddr);
+
+					while((result->error = ::recvfrom(socket->m_iSocket, &buffer, 1, 0, &addr, &addrSz)) == 1)
+					{
+						if(buffer == '\n')
+							break;
+
+						result->data.append(1, buffer);
+
+						addrSz = sizeof(sockaddr);
+					}
+
+					result->peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
+					result->peer += ":";
+					result->peer += ((sockaddr_in *)&addr)->sin_port;
+
+					result->error = socket->CheckError(result->error, 0);
+
+					socket->PushResult(result);
+					
+					socket->m_inCalls_LOCK.Lock();
+					socket->m_inCalls.pop();
+					delete call;
+					socket->m_inCalls_LOCK.Unlock();
+				}
+				break;
+			case SOCK_CALL::SEND:
+				{
+					SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+					result->call = call->call;
+					result->callId = call->callId;
+
+					std::string msg = call->string;
+					int total = 0;
+					int len = msg.size();
+					int bytesleft = len;
+					int n = -1;
+
+					struct sockaddr *addr = NULL;
+
+					if(call->peer != "")
+					{
+						socket->m_Addr.sin_port = htons(call->integer);
+						socket->m_Addr.sin_addr = *socket->GetHostByName(call->peer.c_str());
+
+						memset(socket->m_Addr.sin_zero, NULL, sizeof(socket->m_Addr.sin_zero));
+
+						addr = (struct sockaddr *)&socket->m_Addr;
+					}
+
+					while(total < len)
+					{
+						if(addr == NULL)
+    						n = send(socket->m_iSocket, msg.c_str() + total, bytesleft, 0);
+						else
+							n = sendto(socket->m_iSocket, msg.c_str() + total, bytesleft, 0, addr, sizeof(sockaddr_in));
+						if(n <= 0)
+							break;
+						total += n;
+						bytesleft -= n;
+					}
+
+					result->error = n;
+
+					result->error = socket->CheckError(result->error, 0);
+
+					socket->PushResult(result);
+					
+					socket->m_inCalls_LOCK.Lock();
+					socket->m_inCalls.pop();
+					delete call;
+					socket->m_inCalls_LOCK.Unlock();
+				}
+				break;
+			case SOCK_CALL::BIND:
+				{
+					socket->m_Addr.sin_port = htons(call->integer);
+
+					if(call->string != "")
+						socket->m_Addr.sin_addr = *socket->GetHostByName(call->string.c_str());
+					else
+						socket->m_Addr.sin_addr.s_addr = INADDR_ANY;
+
+					memset(socket->m_Addr.sin_zero, NULL, sizeof(socket->m_Addr.sin_zero));
+	    
+					SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+					result->call = call->call;
+					result->callId = call->callId;
+
+					result->error = bind(socket->m_iSocket, (struct sockaddr *)&socket->m_Addr, sizeof(socket->m_Addr));
+
+					result->error = socket->CheckError(result->error, 0);
+
+					socket->PushResult(result);
+					
+					socket->m_inCalls_LOCK.Lock();
+					socket->m_inCalls.pop();
+					delete call;
+					socket->m_inCalls_LOCK.Unlock();
+				}
+				break;
+			case SOCK_CALL::LISTEN:
+				{
+					SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+					result->call = call->call;
+					result->callId = call->callId;
+
+					result->error = listen(socket->m_iSocket, call->integer);
+
+					result->error = socket->CheckError(result->error, 0);
+
+					socket->PushResult(result);
+					
+					socket->m_inCalls_LOCK.Lock();
+					socket->m_inCalls.pop();
+					delete call;
+					socket->m_inCalls_LOCK.Unlock();
+				}
+				break;
+			case SOCK_CALL::ACCEPT:
+				{
+					fd_set read;
+					memset(&read, NULL, sizeof(fd_set));
+					FD_SET(socket->m_iSocket, &read);
+
+					timeval t;
+					t.tv_sec = 0;
+					t.tv_usec = 0;
+
+					select(0, &read, 0, 0, &t);
+
+					if(!(FD_ISSET(socket->m_iSocket, &read)))
+						break;
+
+					struct sockaddr_in their_addr;
+					socklen_t size = sizeof(their_addr);
+					
+					SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+					result->call = call->call;
+					result->callId = call->callId;
+
+					result->secondary = accept(socket->m_iSocket, (struct sockaddr*)&their_addr, &size);
+
+					result->error = socket->CheckError(result->secondary, 0);
+
+					socket->PushResult(result);
+					
+					socket->m_inCalls_LOCK.Lock();
+					socket->m_inCalls.pop();
+					delete call;
+					socket->m_inCalls_LOCK.Unlock();
+				}
+				break;
+			default:
+				{
+					socket->m_inCalls_LOCK.Lock();
+					socket->m_inCalls.pop();
+					delete call;
+					socket->m_inCalls_LOCK.Unlock();
+				}
+				break;
+			}
+
+			
+#ifdef WIN32
+			Sleep(1);
+#else
+			usleep(1000);
+#endif
+		}
+
+		return NULL;
+	};
+
+private:
+	int m_iSocket;
+	struct sockaddr_in m_Addr;
+	unsigned int m_iCallCounter;
+
+	std::queue<SOCK_CALL::SockCall *> m_inCalls;
+	CMutexLock m_inCalls_LOCK;
+
+	std::queue<SOCK_CALL::SockCallResult *> m_outResults;
+	CMutexLock m_outResults_LOCK;
+
+	ILuaObject *m_pCallback;
+
+#ifdef WIN32
+	HANDLE m_Thread;
+#else
+	pthread_t m_Thread;
+#endif
+};
+
+#endif // __THREADEDSOCKET_H__
