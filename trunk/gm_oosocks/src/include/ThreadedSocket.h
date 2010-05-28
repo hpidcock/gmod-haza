@@ -58,6 +58,9 @@
 #ifndef __THREADEDSOCKET_H__
 #define __THREADEDSOCKET_H__
 
+class CThreadedSocket;
+extern std::vector<CThreadedSocket *> sockets;
+
 class CMutexLock
 {
 public:
@@ -164,51 +167,100 @@ namespace SOCK_CALL
 class CThreadedSocket
 {
 public:
+	int m_iRefCount;
+
+	void Ref()
+	{
+		m_iRefCount++;
+	};
+
+	void UnRef()
+	{
+		m_iRefCount--;
+
+		if(!CanDelete())
+			return;
+
+		delete this;
+	};
+
+	bool CanDelete()
+	{
+		return m_iRefCount <= 0 && m_inCalls.size() == 0 && m_inCallsRecv.size() == 0 && m_outResults.size() == 0;
+	};
+
 	CThreadedSocket(int protocol)
 	{
-		m_pCallback = NULL;
+		m_iRefCount = 0;
+
+		m_Callback = -1;
 
 		m_iCallCounter = 0;
 
-		m_iSocket = socket(SOCK_STREAM, AF_INET, protocol);
+		m_iSocket = socket(AF_INET, SOCK_STREAM, protocol);
 
 		char yes = 1;
 		setsockopt(m_iSocket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
 		
-		m_Addr.sin_family = SOCK_STREAM;
+		m_Addr.sin_family = AF_INET;
+
+		m_bRunning = true;
 
 #ifdef WIN32
-		CreateThread(NULL, NULL, &ThreadProc, this, NULL, NULL);
+		m_Thread = CreateThread(NULL, NULL, &ThreadProc, this, NULL, NULL);
 #else
 		pthread_create(&m_Thread, NULL, &ThreadProc, this);
 #endif
+
+		sockets.push_back(this);
 	};
 
 	CThreadedSocket(int sock, bool x)
-	{
-		m_pCallback = NULL;
+	{	
+		m_iRefCount = 0;
+
+		m_Callback = -1;
 
 		m_iCallCounter = 0;
 
 		m_iSocket = sock;
 
+		m_bRunning = true;
+
 #ifdef WIN32
-		CreateThread(NULL, NULL, &ThreadProc, this, NULL, NULL);
+		m_Thread = CreateThread(NULL, NULL, &ThreadProc, this, NULL, NULL);
 #else
 		pthread_create(&m_Thread, NULL, &ThreadProc, this);
 #endif
+
+		sockets.push_back(this);
 	};
 
 	~CThreadedSocket(void)
 	{
-		if(m_pCallback != NULL)
+		std::vector<CThreadedSocket *>::iterator itor = sockets.begin();
+		while(itor != sockets.end())
 		{
-			m_pCallback->UnReference();
-			m_pCallback = NULL;
+			if((*itor) == this)
+			{
+				sockets.erase(itor);
+				break;
+			}
+
+			itor++;
 		}
 
+		if(m_Callback != -1)
+		{
+			g_Lua->FreeReference(m_Callback);
+			m_Callback = -1;
+		}
+
+		m_bRunning = false;
 #ifdef WIN32
-		TerminateThread(ThreadProc, NULL);
+		DWORD exit = NULL;
+		GetExitCodeThread(m_Thread, &exit);
+		TerminateThread(m_Thread, exit);
 #else
 		pthread_cancel(m_Thread);
 #endif
@@ -218,6 +270,24 @@ public:
 #else
 		close(m_iSocket);
 #endif
+
+		SOCK_CALL::SockCall *cleanupCall = NULL;
+		while((cleanupCall = PopCall()) != NULL)
+		{
+			delete cleanupCall;
+		}
+
+		cleanupCall = NULL;
+		while((cleanupCall = PopCallRecv()) != NULL)
+		{
+			delete cleanupCall;
+		}
+
+		SOCK_CALL::SockCallResult *cleanupResult = NULL;
+		while((cleanupResult = PopResult()) != NULL)
+		{
+			delete cleanupResult;
+		}
 	};
 
 	int Send(std::string data)
@@ -265,7 +335,7 @@ public:
 		call->string = "";
 		call->peer = "";
 
-		PushCall(call);
+		PushCallRecv(call);
 
 		return m_iCallCounter;
 	};
@@ -282,7 +352,7 @@ public:
 		call->string = "";
 		call->peer = "";
 
-		PushCall(call);
+		PushCallRecv(call);
 
 		return m_iCallCounter;
 	};
@@ -355,43 +425,49 @@ public:
 		return m_iCallCounter;
 	};
 
-	void SetCallback(ILuaObject *callback)
-	{
-		m_pCallback = callback;
-	};
-
-	ILuaObject *GetCallback(void)
-	{
-		return m_pCallback;
-	};
-
 	void InvokeCallbacks(void)
 	{
-		if(m_pCallback == NULL)
-			return;
-
 		SOCK_CALL::SockCallResult *result = NULL;
 		while((result = PopResult()) != NULL)
 		{
-			g_Lua->Push(m_pCallback);
-			AutoUnRef meta = g_Lua->GetMetaTable(MT_SOCKET, TYPE_SOCKET);
-			g_Lua->PushUserData(meta, static_cast<void *>(this));
-			g_Lua->Push((float)result->call);
-			g_Lua->Push((float)result->callId);
-			g_Lua->Push((float)result->error);
-			if(result->call == SOCK_CALL::ACCEPT)
+			if(m_Callback != -1)
 			{
-				if(result->error == SOCK_ERROR::OK)
-					g_Lua->PushUserData(meta, static_cast<void *>(new CThreadedSocket(result->secondary, true)));
+				AutoUnRef meta = g_Lua->GetMetaTable(MT_SOCKET, TYPE_SOCKET);
+				this->Ref();
+
+				g_Lua->PushReference(m_Callback);
+				g_Lua->PushUserData(meta, static_cast<void *>(this));
+				g_Lua->Push((float)result->call);
+				g_Lua->Push((float)result->callId);
+				g_Lua->Push((float)result->error);
+				if(result->call == SOCK_CALL::ACCEPT)
+				{
+					if(result->error == SOCK_ERROR::OK)
+					{
+						CThreadedSocket *newSock = new CThreadedSocket(result->secondary, true);
+						newSock->Ref();
+						g_Lua->PushUserData(meta, static_cast<void *>(newSock));
+					}
+					else
+						g_Lua->Push(false);
+				}
 				else
-					g_Lua->Push(false);
+				{
+					g_Lua->Push(result->data.c_str());
+				}
+				g_Lua->Push(result->peer.c_str());
+				g_Lua->Call(6, 0);
 			}
-			else
-				g_Lua->Push(result->data.c_str());
-			g_Lua->Push(result->peer.c_str());
-			g_Lua->Call(6, 0);
 			delete result;
 		}
+
+		if(CanDelete())
+			delete this;
+	};
+
+	void SetCallback(int i)
+	{
+		m_Callback = i;
 	};
 
 protected:
@@ -399,6 +475,13 @@ protected:
 	{
 		m_inCalls_LOCK.Lock();
 		m_inCalls.push(call);
+		m_inCalls_LOCK.Unlock();
+	};
+	
+	void PushCallRecv(SOCK_CALL::SockCall *call)
+	{
+		m_inCalls_LOCK.Lock();
+		m_inCallsRecv.push(call);
 		m_inCalls_LOCK.Unlock();
 	};
 
@@ -422,6 +505,40 @@ protected:
 		}
 
 		m_outResults_LOCK.Unlock();
+
+		return result;
+	};
+
+	SOCK_CALL::SockCall *PopCall(void)
+	{
+		SOCK_CALL::SockCall *result = NULL;
+		
+		m_inCalls_LOCK.Lock();
+
+		if(m_inCalls.size() > 0)
+		{
+			result = m_inCalls.front();
+			m_inCalls.pop();
+		}
+
+		m_inCalls_LOCK.Unlock();
+
+		return result;
+	};
+
+	SOCK_CALL::SockCall *PopCallRecv(void)
+	{
+		SOCK_CALL::SockCall *result = NULL;
+		
+		m_inCalls_LOCK.Lock();
+
+		if(m_inCallsRecv.size() > 0)
+		{
+			result = m_inCallsRecv.front();
+			m_inCallsRecv.pop();
+		}
+
+		m_inCalls_LOCK.Unlock();
 
 		return result;
 	};
@@ -458,274 +575,319 @@ protected:
 #endif
 	{
 		CThreadedSocket *socket = static_cast<CThreadedSocket *>(lpParameter);
-		while(true)
+		if(socket == NULL)
+			return NULL;
+
+		bool alternatingBuffer = false;
+
+		while(socket->m_bRunning)
 		{
 			socket->m_inCalls_LOCK.Lock();
-			SOCK_CALL::SockCall *call = socket->m_inCalls.front();
-			socket->m_inCalls_LOCK.Unlock();
+			SOCK_CALL::SockCall *call = NULL;
 
-			switch(call->call)
+			if(alternatingBuffer)
 			{
-			case SOCK_CALL::CONNECT:
-				{
-					socket->m_Addr.sin_port = htons(call->integer);
-					socket->m_Addr.sin_addr = *socket->GetHostByName(call->string.c_str());
-
-					memset(socket->m_Addr.sin_zero, NULL, sizeof(socket->m_Addr.sin_zero));
-	    
-					SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
-					result->call = call->call;
-					result->callId = call->callId;
-
-					result->error = connect(socket->m_iSocket, (struct sockaddr *)&socket->m_Addr, sizeof(socket->m_Addr));
-
-					result->error = socket->CheckError(result->error, 0);
-
-					socket->PushResult(result);
-					
-					socket->m_inCalls_LOCK.Lock();
-					socket->m_inCalls.pop();
-					delete call;
-					socket->m_inCalls_LOCK.Unlock();
-				}
-				break;
-			case SOCK_CALL::REC_SIZE:
-				{
-					fd_set read;
-					memset(&read, NULL, sizeof(fd_set));
-					FD_SET(socket->m_iSocket, &read);
-
-					timeval t;
-					t.tv_sec = 0;
-					t.tv_usec = 0;
-
-					select(0, &read, 0, 0, &t);
-
-					if(!(FD_ISSET(socket->m_iSocket, &read)))
-						break;
-
-					SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
-					result->call = call->call;
-					result->callId = call->callId;
-
-					int count = 0;
-					char *buffer = (char *)malloc(call->integer + 1);
-					sockaddr addr;
-					socklen_t addrSz = sizeof(sockaddr);
-
-					result->error = recvfrom(socket->m_iSocket, buffer, call->integer, 0, &addr, &addrSz);
-
-
-					if(result->error >= 0)
-						buffer[result->error] = '\0';
-					else
-						buffer[0] = '\0';
-
-					result->data = buffer;
-
-					free(buffer);
-
-					result->peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
-					result->peer += ":";
-					result->peer += ((sockaddr_in *)&addr)->sin_port;
-
-					result->error = socket->CheckError(result->error, 0);
-
-					socket->PushResult(result);
-					
-					socket->m_inCalls_LOCK.Lock();
-					socket->m_inCalls.pop();
-					delete call;
-					socket->m_inCalls_LOCK.Unlock();
-				}
-				break;
-			case SOCK_CALL::REC_LINE:
-				{
-					fd_set read;
-					memset(&read, NULL, sizeof(fd_set));
-					FD_SET(socket->m_iSocket, &read);
-
-					timeval t;
-					t.tv_sec = 0;
-					t.tv_usec = 0;
-
-					select(0, &read, 0, 0, &t);
-
-					if(!(FD_ISSET(socket->m_iSocket, &read)))
-						break;
-
-					SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
-					result->call = call->call;
-					result->callId = call->callId;
-
-					char buffer = 0;
-
-					result->data = "";
-
-					sockaddr addr;
-					socklen_t addrSz = sizeof(sockaddr);
-
-					while((result->error = ::recvfrom(socket->m_iSocket, &buffer, 1, 0, &addr, &addrSz)) == 1)
-					{
-						if(buffer == '\n')
-							break;
-
-						result->data.append(1, buffer);
-
-						addrSz = sizeof(sockaddr);
-					}
-
-					result->peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
-					result->peer += ":";
-					result->peer += ((sockaddr_in *)&addr)->sin_port;
-
-					result->error = socket->CheckError(result->error, 0);
-
-					socket->PushResult(result);
-					
-					socket->m_inCalls_LOCK.Lock();
-					socket->m_inCalls.pop();
-					delete call;
-					socket->m_inCalls_LOCK.Unlock();
-				}
-				break;
-			case SOCK_CALL::SEND:
-				{
-					SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
-					result->call = call->call;
-					result->callId = call->callId;
-
-					std::string msg = call->string;
-					int total = 0;
-					int len = msg.size();
-					int bytesleft = len;
-					int n = -1;
-
-					struct sockaddr *addr = NULL;
-
-					if(call->peer != "")
-					{
-						socket->m_Addr.sin_port = htons(call->integer);
-						socket->m_Addr.sin_addr = *socket->GetHostByName(call->peer.c_str());
-
-						memset(socket->m_Addr.sin_zero, NULL, sizeof(socket->m_Addr.sin_zero));
-
-						addr = (struct sockaddr *)&socket->m_Addr;
-					}
-
-					while(total < len)
-					{
-						if(addr == NULL)
-    						n = send(socket->m_iSocket, msg.c_str() + total, bytesleft, 0);
-						else
-							n = sendto(socket->m_iSocket, msg.c_str() + total, bytesleft, 0, addr, sizeof(sockaddr_in));
-						if(n <= 0)
-							break;
-						total += n;
-						bytesleft -= n;
-					}
-
-					result->error = n;
-
-					result->error = socket->CheckError(result->error, 0);
-
-					socket->PushResult(result);
-					
-					socket->m_inCalls_LOCK.Lock();
-					socket->m_inCalls.pop();
-					delete call;
-					socket->m_inCalls_LOCK.Unlock();
-				}
-				break;
-			case SOCK_CALL::BIND:
-				{
-					socket->m_Addr.sin_port = htons(call->integer);
-
-					if(call->string != "")
-						socket->m_Addr.sin_addr = *socket->GetHostByName(call->string.c_str());
-					else
-						socket->m_Addr.sin_addr.s_addr = INADDR_ANY;
-
-					memset(socket->m_Addr.sin_zero, NULL, sizeof(socket->m_Addr.sin_zero));
-	    
-					SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
-					result->call = call->call;
-					result->callId = call->callId;
-
-					result->error = bind(socket->m_iSocket, (struct sockaddr *)&socket->m_Addr, sizeof(socket->m_Addr));
-
-					result->error = socket->CheckError(result->error, 0);
-
-					socket->PushResult(result);
-					
-					socket->m_inCalls_LOCK.Lock();
-					socket->m_inCalls.pop();
-					delete call;
-					socket->m_inCalls_LOCK.Unlock();
-				}
-				break;
-			case SOCK_CALL::LISTEN:
-				{
-					SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
-					result->call = call->call;
-					result->callId = call->callId;
-
-					result->error = listen(socket->m_iSocket, call->integer);
-
-					result->error = socket->CheckError(result->error, 0);
-
-					socket->PushResult(result);
-					
-					socket->m_inCalls_LOCK.Lock();
-					socket->m_inCalls.pop();
-					delete call;
-					socket->m_inCalls_LOCK.Unlock();
-				}
-				break;
-			case SOCK_CALL::ACCEPT:
-				{
-					fd_set read;
-					memset(&read, NULL, sizeof(fd_set));
-					FD_SET(socket->m_iSocket, &read);
-
-					timeval t;
-					t.tv_sec = 0;
-					t.tv_usec = 0;
-
-					select(0, &read, 0, 0, &t);
-
-					if(!(FD_ISSET(socket->m_iSocket, &read)))
-						break;
-
-					struct sockaddr_in their_addr;
-					socklen_t size = sizeof(their_addr);
-					
-					SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
-					result->call = call->call;
-					result->callId = call->callId;
-
-					result->secondary = accept(socket->m_iSocket, (struct sockaddr*)&their_addr, &size);
-
-					result->error = socket->CheckError(result->secondary, 0);
-
-					socket->PushResult(result);
-					
-					socket->m_inCalls_LOCK.Lock();
-					socket->m_inCalls.pop();
-					delete call;
-					socket->m_inCalls_LOCK.Unlock();
-				}
-				break;
-			default:
-				{
-					socket->m_inCalls_LOCK.Lock();
-					socket->m_inCalls.pop();
-					delete call;
-					socket->m_inCalls_LOCK.Unlock();
-				}
-				break;
+				if(socket->m_inCalls.size() > 0)
+					call = socket->m_inCalls.front();
+			}
+			else
+			{
+				if(socket->m_inCallsRecv.size() > 0)
+					call = socket->m_inCallsRecv.front();
 			}
 
+			socket->m_inCalls_LOCK.Unlock();
+
+			if(call)
+			{
+				switch(call->call)
+				{
+				case SOCK_CALL::CONNECT:
+					{
+						socket->m_Addr.sin_port = htons(call->integer);
+						socket->m_Addr.sin_addr = *socket->GetHostByName(call->string.c_str());
+
+						memset(socket->m_Addr.sin_zero, NULL, sizeof(socket->m_Addr.sin_zero));
+		    
+						SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+						result->call = call->call;
+						result->callId = call->callId;
+
+						result->error = connect(socket->m_iSocket, (struct sockaddr *)&socket->m_Addr, sizeof(socket->m_Addr));
+
+						result->error = socket->CheckError(result->error, 0);
+
+						socket->PushResult(result);
+						
+						socket->m_inCalls_LOCK.Lock();
+						if(alternatingBuffer)
+							socket->m_inCalls.pop();
+						else
+							socket->m_inCallsRecv.pop();
+						delete call;
+						socket->m_inCalls_LOCK.Unlock();
+					}
+					break;
+				case SOCK_CALL::REC_SIZE:
+					{
+						fd_set read;
+						memset(&read, NULL, sizeof(fd_set));
+						FD_SET(socket->m_iSocket, &read);
+
+						timeval t;
+						t.tv_sec = 0;
+						t.tv_usec = 0;
+
+						select(0, &read, 0, 0, &t);
+
+						if(!(FD_ISSET(socket->m_iSocket, &read)))
+							break;
+
+						SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+						result->call = call->call;
+						result->callId = call->callId;
+
+						int count = 0;
+						char *buffer = (char *)malloc(call->integer + 1);
+						sockaddr addr;
+						socklen_t addrSz = sizeof(sockaddr);
+
+						result->error = recvfrom(socket->m_iSocket, buffer, call->integer, 0, &addr, &addrSz);
+
+
+						if(result->error >= 0)
+							buffer[result->error] = '\0';
+						else
+							buffer[0] = '\0';
+
+						result->data = buffer;
+
+						free(buffer);
+
+						result->peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
+						result->peer += ":";
+						result->peer += ((sockaddr_in *)&addr)->sin_port;
+
+						result->error = socket->CheckError(result->error, 0);
+
+						socket->PushResult(result);
+						
+						socket->m_inCalls_LOCK.Lock();
+						if(alternatingBuffer)
+							socket->m_inCalls.pop();
+						else
+							socket->m_inCallsRecv.pop();
+						delete call;
+						socket->m_inCalls_LOCK.Unlock();
+					}
+					break;
+				case SOCK_CALL::REC_LINE:
+					{
+						fd_set read;
+						memset(&read, NULL, sizeof(fd_set));
+						FD_SET(socket->m_iSocket, &read);
+
+						timeval t;
+						t.tv_sec = 0;
+						t.tv_usec = 0;
+
+						select(0, &read, 0, 0, &t);
+
+						if(!(FD_ISSET(socket->m_iSocket, &read)))
+							break;
+
+						SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+						result->call = call->call;
+						result->callId = call->callId;
+
+						char buffer = 0;
+
+						result->data = "";
+
+						sockaddr addr;
+						socklen_t addrSz = sizeof(sockaddr);
+
+						while((result->error = recvfrom(socket->m_iSocket, &buffer, 1, 0, &addr, &addrSz)) == 1)
+						{
+							if(buffer == '\n')
+								break;
+
+							result->data.append(1, buffer);
+
+							addrSz = sizeof(sockaddr);
+						}
+
+						result->peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
+						result->peer += ":";
+						result->peer += ((sockaddr_in *)&addr)->sin_port;
+
+						result->error = socket->CheckError(result->error, 0);
+
+						socket->PushResult(result);
+						
+						socket->m_inCalls_LOCK.Lock();
+						if(alternatingBuffer)
+							socket->m_inCalls.pop();
+						else
+							socket->m_inCallsRecv.pop();
+						delete call;
+						socket->m_inCalls_LOCK.Unlock();
+					}
+					break;
+				case SOCK_CALL::SEND:
+					{
+						SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+						result->call = call->call;
+						result->callId = call->callId;
+
+						std::string msg = call->string;
+						int total = 0;
+						int len = msg.size();
+						int bytesleft = len;
+						int n = -1;
+
+						struct sockaddr *addr = NULL;
+
+						if(call->peer != "")
+						{
+							socket->m_Addr.sin_port = htons(call->integer);
+							socket->m_Addr.sin_addr = *socket->GetHostByName(call->peer.c_str());
+
+							memset(socket->m_Addr.sin_zero, NULL, sizeof(socket->m_Addr.sin_zero));
+
+							addr = (struct sockaddr *)&socket->m_Addr;
+						}
+
+						while(total < len)
+						{
+							if(addr == NULL)
+    							n = send(socket->m_iSocket, msg.c_str() + total, bytesleft, 0);
+							else
+								n = sendto(socket->m_iSocket, msg.c_str() + total, bytesleft, 0, addr, sizeof(sockaddr_in));
+							if(n <= 0)
+								break;
+							total += n;
+							bytesleft -= n;
+						}
+
+						result->error = n;
+
+						result->error = socket->CheckError(result->error, 0);
+
+						socket->PushResult(result);
+						
+						socket->m_inCalls_LOCK.Lock();
+						if(alternatingBuffer)
+							socket->m_inCalls.pop();
+						else
+							socket->m_inCallsRecv.pop();
+						delete call;
+						socket->m_inCalls_LOCK.Unlock();
+					}
+					break;
+				case SOCK_CALL::BIND:
+					{
+						socket->m_Addr.sin_port = htons(call->integer);
+
+						if(call->string != "")
+							socket->m_Addr.sin_addr = *socket->GetHostByName(call->string.c_str());
+						else
+							socket->m_Addr.sin_addr.s_addr = INADDR_ANY;
+
+						memset(socket->m_Addr.sin_zero, NULL, sizeof(socket->m_Addr.sin_zero));
+		    
+						SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+						result->call = call->call;
+						result->callId = call->callId;
+
+						result->error = bind(socket->m_iSocket, (struct sockaddr *)&socket->m_Addr, sizeof(socket->m_Addr));
+
+						result->error = socket->CheckError(result->error, 0);
+
+						socket->PushResult(result);
+						
+						socket->m_inCalls_LOCK.Lock();
+						if(alternatingBuffer)
+							socket->m_inCalls.pop();
+						else
+							socket->m_inCallsRecv.pop();
+						delete call;
+						socket->m_inCalls_LOCK.Unlock();
+					}
+					break;
+				case SOCK_CALL::LISTEN:
+					{
+						SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+						result->call = call->call;
+						result->callId = call->callId;
+
+						result->error = listen(socket->m_iSocket, call->integer);
+
+						result->error = socket->CheckError(result->error, 0);
+
+						socket->PushResult(result);
+						
+						socket->m_inCalls_LOCK.Lock();
+						if(alternatingBuffer)
+							socket->m_inCalls.pop();
+						else
+							socket->m_inCallsRecv.pop();
+						delete call;
+						socket->m_inCalls_LOCK.Unlock();
+					}
+					break;
+				case SOCK_CALL::ACCEPT:
+					{
+						fd_set read;
+						memset(&read, NULL, sizeof(fd_set));
+						FD_SET(socket->m_iSocket, &read);
+
+						timeval t;
+						t.tv_sec = 0;
+						t.tv_usec = 0;
+
+						select(0, &read, 0, 0, &t);
+
+						if(!(FD_ISSET(socket->m_iSocket, &read)))
+							break;
+
+						struct sockaddr_in their_addr;
+						socklen_t size = sizeof(their_addr);
+						
+						SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+						result->call = call->call;
+						result->callId = call->callId;
+
+						result->secondary = accept(socket->m_iSocket, (struct sockaddr*)&their_addr, &size);
+
+						result->error = socket->CheckError(result->secondary, 0);
+
+						socket->PushResult(result);
+						
+						socket->m_inCalls_LOCK.Lock();
+						if(alternatingBuffer)
+							socket->m_inCalls.pop();
+						else
+							socket->m_inCallsRecv.pop();
+						delete call;
+						socket->m_inCalls_LOCK.Unlock();
+					}
+					break;
+				default:
+					{
+						socket->m_inCalls_LOCK.Lock();
+						if(alternatingBuffer)
+							socket->m_inCalls.pop();
+						else
+							socket->m_inCallsRecv.pop();
+						delete call;
+						socket->m_inCalls_LOCK.Unlock();
+					}
+					break;
+				}
+			}
+
+			alternatingBuffer = !alternatingBuffer;
 			
 #ifdef WIN32
 			Sleep(1);
@@ -738,17 +900,20 @@ protected:
 	};
 
 private:
+	bool m_bRunning;
+
 	int m_iSocket;
 	struct sockaddr_in m_Addr;
 	unsigned int m_iCallCounter;
 
 	std::queue<SOCK_CALL::SockCall *> m_inCalls;
+	std::queue<SOCK_CALL::SockCall *> m_inCallsRecv;
 	CMutexLock m_inCalls_LOCK;
 
 	std::queue<SOCK_CALL::SockCallResult *> m_outResults;
 	CMutexLock m_outResults_LOCK;
 
-	ILuaObject *m_pCallback;
+	int m_Callback;
 
 #ifdef WIN32
 	HANDLE m_Thread;
