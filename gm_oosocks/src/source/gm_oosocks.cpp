@@ -7,10 +7,10 @@
 
 GMOD_MODULE(Init, Shutdown);
 
+static std::vector<CThreadedSocket *> sockets;
+
 namespace OOSock
 {
-	static std::vector<CThreadedSocket *> sockets;
-
 	LUA_FUNCTION(__new)
 	{
 		g_Lua->CheckType(1, GLua::TYPE_NUMBER);
@@ -26,9 +26,8 @@ namespace OOSock
 		CThreadedSocket *sock = new CThreadedSocket(proto);
 
 		AutoUnRef meta = g_Lua->GetMetaTable(MT_SOCKET, TYPE_SOCKET);
+		sock->Ref();
 		g_Lua->PushUserData(meta, static_cast<void *>(sock));
-
-		sockets.push_back(sock);
 
 		return 1;
 	}
@@ -42,19 +41,7 @@ namespace OOSock
 		if(sock == NULL)
 			return 0;
 
-		std::vector<CThreadedSocket *>::iterator itor = sockets.begin();
-		while(itor != sockets.end())
-		{
-			if((*itor) == sock)
-			{
-				sockets.erase(itor);
-				break;
-			}
-
-			itor++;
-		}
-
-		delete sock;
+		sock->UnRef();
 
 		return 0;
 	}
@@ -69,7 +56,7 @@ namespace OOSock
 		if(sock == NULL)
 			return 0;
 
-		sock->SetCallback(g_Lua->GetObject(2));
+		sock->SetCallback(g_Lua->GetReference(2));
 
 		return 0;
 	}
@@ -226,6 +213,7 @@ int Init(void)
 		__index->SetMember("SendLine", OOSock::SendLine);
 		__index->SetMember("Receive", OOSock::Receive);
 		__index->SetMember("ReceiveLine", OOSock::ReceiveLine);
+		__index->SetMember("SetCallback", OOSock::SetCallback);
 
 		meta->SetMember("__index", __index);
 	}
@@ -240,6 +228,14 @@ int Init(void)
 	g_Lua->SetGlobal("SCKERR_CONNECTION_REST", (float)SOCK_ERROR::CONNECTION_REST);
 	g_Lua->SetGlobal("SCKERR_NOT_CONNECTED", (float)SOCK_ERROR::NOT_CONNECTED);
 	g_Lua->SetGlobal("SCKERR_TIMED_OUT", (float)SOCK_ERROR::TIMED_OUT);
+
+	g_Lua->SetGlobal("SCKCALL_CONNECT", (float)SOCK_CALL::CONNECT);
+	g_Lua->SetGlobal("SCKCALL_LISTEN", (float)SOCK_CALL::LISTEN);
+	g_Lua->SetGlobal("SCKCALL_BIND", (float)SOCK_CALL::BIND);
+	g_Lua->SetGlobal("SCKCALL_ACCEPT", (float)SOCK_CALL::ACCEPT);
+	g_Lua->SetGlobal("SCKCALL_REC_LINE", (float)SOCK_CALL::REC_LINE);
+	g_Lua->SetGlobal("SCKCALL_REC_SIZE", (float)SOCK_CALL::REC_SIZE);
+	g_Lua->SetGlobal("SCKCALL_SEND", (float)SOCK_CALL::SEND);
 
 	AutoUnRef hookSystem = g_Lua->GetGlobal("hook");
 	AutoUnRef hookAdd = hookSystem->GetMember("Add");
