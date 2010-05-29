@@ -183,8 +183,9 @@ namespace OOSock
 
 	LUA_FUNCTION(STATIC_CallbackHook)
 	{
-		std::vector<CThreadedSocket *>::iterator itor = sockets.begin();
-		while(itor != sockets.end())
+		std::vector<CThreadedSocket *> copy = sockets;
+		std::vector<CThreadedSocket *>::iterator itor = copy.begin();
+		while(itor != copy.end())
 		{
 			(*itor)->InvokeCallbacks();
 
@@ -225,7 +226,7 @@ int Init(void)
 
 	g_Lua->SetGlobal("SCKERR_OK", (float)SOCK_ERROR::OK);
 	g_Lua->SetGlobal("SCKERR_BAD", (float)SOCK_ERROR::BAD);
-	g_Lua->SetGlobal("SCKERR_CONNECTION_REST", (float)SOCK_ERROR::CONNECTION_REST);
+	g_Lua->SetGlobal("SCKERR_CONNECTION_RESET", (float)SOCK_ERROR::CONNECTION_RESET);
 	g_Lua->SetGlobal("SCKERR_NOT_CONNECTED", (float)SOCK_ERROR::NOT_CONNECTED);
 	g_Lua->SetGlobal("SCKERR_TIMED_OUT", (float)SOCK_ERROR::TIMED_OUT);
 

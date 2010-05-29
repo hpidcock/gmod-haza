@@ -107,7 +107,7 @@ namespace SOCK_ERROR
 	{
 		OK = 0,
 		NOT_CONNECTED,
-		CONNECTION_REST,
+		CONNECTION_RESET,
 		TIMED_OUT,
 		BAD
 	};
@@ -119,7 +119,7 @@ namespace SOCK_ERROR
 #else
 		static const int OS[] = {NULL, ENOTCONN, ECONNRESET, ETIMEDOUT};
 #endif
-		static const int TRANS[] = {OK, NOT_CONNECTED, CONNECTION_REST, TIMED_OUT};
+		static const int TRANS[] = {OK, NOT_CONNECTED, CONNECTION_RESET, TIMED_OUT};
 
 		for(int i = 0; i < sizeof(OS)/sizeof(int); i++)
 		{
