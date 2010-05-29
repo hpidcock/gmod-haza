@@ -42,6 +42,8 @@
 	#include <unistd.h>
 	#include <netdb.h>
 	#include <sys/types.h>
+	#include <errno.h>
+	#include <string.h>
 #endif
 
 #include <string>
