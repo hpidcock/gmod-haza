@@ -71,7 +71,7 @@ public:
 #ifdef WIN32
 		InitializeCriticalSection(&m_Lock);
 #else
-		m_Lock = PTHREAD_MUTEX_INITIALIZER;
+		m_Lock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 #endif
 	};
 
