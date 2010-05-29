@@ -55,7 +55,7 @@ static void Msg( char *format, ... )
 	va_list		argptr;
 	char		string[4096];
 	va_start ( argptr, format );
-	vsprintf_s( string, 4096, format, argptr );
+	sprintf( string, format, argptr );
 	va_end ( argptr );
 
 	ILuaObject* msg = g_Lua->GetGlobal( "Msg" );

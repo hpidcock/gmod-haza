@@ -7,7 +7,7 @@
 
 GMOD_MODULE(Init, Shutdown);
 
-static std::vector<CThreadedSocket *> sockets;
+std::vector<CThreadedSocket *> sockets;
 
 namespace OOSock
 {
