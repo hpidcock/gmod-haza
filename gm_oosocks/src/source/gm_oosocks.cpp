@@ -132,7 +132,14 @@ namespace OOSock
 		if(sock == NULL)
 			return 0;
 
-		g_Lua->Push((float)sock->Send(g_Lua->GetString(2)));
+		if(g_Lua->GetType(3) == GLua::TYPE_STRING && g_Lua->GetType(4) == GLua::TYPE_NUMBER)
+		{
+			g_Lua->Push((float)sock->Send(g_Lua->GetString(2), g_Lua->GetString(3), g_Lua->GetInteger(4)));
+		}
+		else
+		{
+			g_Lua->Push((float)sock->Send(g_Lua->GetString(2)));
+		}
 
 		return 1;
 	}
@@ -148,6 +155,15 @@ namespace OOSock
 			return 0;
 
 		g_Lua->Push((float)sock->Send(std::string(g_Lua->GetString(2)) + "\n"));
+
+		if(g_Lua->GetType(3) == GLua::TYPE_STRING && g_Lua->GetType(4) == GLua::TYPE_NUMBER)
+		{
+			g_Lua->Push((float)sock->Send(std::string(g_Lua->GetString(2)) + "\n", g_Lua->GetString(3), g_Lua->GetInteger(4)));
+		}
+		else
+		{
+			g_Lua->Push((float)sock->Send(std::string(g_Lua->GetString(2)) + "\n"));
+		}
 
 		return 1;
 	}
