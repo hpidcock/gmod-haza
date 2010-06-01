@@ -154,8 +154,6 @@ namespace OOSock
 		if(sock == NULL)
 			return 0;
 
-		g_Lua->Push((float)sock->Send(std::string(g_Lua->GetString(2)) + "\n"));
-
 		if(g_Lua->GetType(3) == GLua::TYPE_STRING && g_Lua->GetType(4) == GLua::TYPE_NUMBER)
 		{
 			g_Lua->Push((float)sock->Send(std::string(g_Lua->GetString(2)) + "\n", g_Lua->GetString(3), g_Lua->GetInteger(4)));
@@ -197,6 +195,20 @@ namespace OOSock
 		return 1;
 	}
 
+	LUA_FUNCTION(ReceiveDatagram)
+	{
+		g_Lua->CheckType(1, TYPE_SOCKET);
+
+		CThreadedSocket *sock = reinterpret_cast<CThreadedSocket *>(g_Lua->GetUserData(1));
+
+		if(sock == NULL)
+			return 0;
+
+		g_Lua->Push((float)sock->ReceiveDatagram());
+
+		return 1;
+	}
+
 	LUA_FUNCTION(STATIC_CallbackHook)
 	{
 		std::vector<CThreadedSocket *> copy = sockets;
@@ -230,6 +242,7 @@ int Init(void)
 		__index->SetMember("SendLine", OOSock::SendLine);
 		__index->SetMember("Receive", OOSock::Receive);
 		__index->SetMember("ReceiveLine", OOSock::ReceiveLine);
+		__index->SetMember("ReceiveDatagram", OOSock::ReceiveDatagram);
 		__index->SetMember("SetCallback", OOSock::SetCallback);
 
 		meta->SetMember("__index", __index);
@@ -253,6 +266,7 @@ int Init(void)
 	g_Lua->SetGlobal("SCKCALL_REC_LINE", (float)SOCK_CALL::REC_LINE);
 	g_Lua->SetGlobal("SCKCALL_REC_SIZE", (float)SOCK_CALL::REC_SIZE);
 	g_Lua->SetGlobal("SCKCALL_SEND", (float)SOCK_CALL::SEND);
+	g_Lua->SetGlobal("SCKCALL_REC_DATAGRAM", (float)SOCK_CALL::REC_DATAGRAM);
 
 	AutoUnRef hookSystem = g_Lua->GetGlobal("hook");
 	AutoUnRef hookAdd = hookSystem->GetMember("Add");
@@ -269,6 +283,15 @@ int Init(void)
 
 int Shutdown(void)
 {
+	std::vector<CThreadedSocket *> copy = sockets;
+	std::vector<CThreadedSocket *>::iterator itor = copy.begin();
+	while(itor != copy.end())
+	{
+		delete (*itor);
+
+		itor++;
+	}
+
 #ifdef WIN32
 	WSACleanup();
 #endif
