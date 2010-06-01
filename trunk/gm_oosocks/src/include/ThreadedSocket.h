@@ -143,7 +143,8 @@ namespace SOCK_CALL
 		SEND,
 		BIND,
 		ACCEPT,
-		LISTEN
+		LISTEN,
+		REC_DATAGRAM
 	};
 
 	struct SockCallResult
@@ -199,7 +200,7 @@ public:
 
 		m_iCallCounter = 0;
 
-		m_iSocket = socket(AF_INET, SOCK_STREAM, protocol);
+		m_iSocket = socket(AF_INET, (protocol == IPPROTO_TCP) ? SOCK_STREAM : SOCK_DGRAM, protocol);
 
 		char yes = 1;
 		setsockopt(m_iSocket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
@@ -349,6 +350,23 @@ public:
 		SOCK_CALL::SockCall *call = new SOCK_CALL::SockCall();
 		call->callId = m_iCallCounter;
 		call->call = SOCK_CALL::REC_LINE;
+
+		call->integer = 0;
+		call->string = "";
+		call->peer = "";
+
+		PushCallRecv(call);
+
+		return m_iCallCounter;
+	};
+
+	int ReceiveDatagram(void)
+	{
+		m_iCallCounter++;
+
+		SOCK_CALL::SockCall *call = new SOCK_CALL::SockCall();
+		call->callId = m_iCallCounter;
+		call->call = SOCK_CALL::REC_DATAGRAM;
 
 		call->integer = 0;
 		call->string = "";
@@ -668,7 +686,9 @@ protected:
 
 						result->peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
 						result->peer += ":";
-						result->peer += ((sockaddr_in *)&addr)->sin_port;
+						char number[16] = {0};
+						sprintf(number, "%d", ((sockaddr_in *)&addr)->sin_port);
+						result->peer += number;
 
 						result->error = socket->CheckError(result->error, 0);
 
@@ -721,7 +741,70 @@ protected:
 
 						result->peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
 						result->peer += ":";
-						result->peer += ((sockaddr_in *)&addr)->sin_port;
+						char number[16] = {0};
+						sprintf(number, "%d", ((sockaddr_in *)&addr)->sin_port);
+						result->peer += number;
+
+						result->error = socket->CheckError(result->error, 0);
+
+						socket->PushResult(result);
+						
+						socket->m_inCalls_LOCK.Lock();
+						if(alternatingBuffer)
+							socket->m_inCalls.pop();
+						else
+							socket->m_inCallsRecv.pop();
+						delete call;
+						socket->m_inCalls_LOCK.Unlock();
+					}
+					break;
+				case SOCK_CALL::REC_DATAGRAM:
+					{
+						fd_set read;
+						memset(&read, NULL, sizeof(fd_set));
+						FD_SET(socket->m_iSocket, &read);
+
+						timeval t;
+						t.tv_sec = 0;
+						t.tv_usec = 0;
+
+						select(0, &read, 0, 0, &t);
+
+						if(!(FD_ISSET(socket->m_iSocket, &read)))
+							break;
+
+						SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+						result->call = call->call;
+						result->callId = call->callId;
+
+						int count = 0;
+						char *buffer = (char *)malloc(1500);
+						sockaddr addr;
+						socklen_t addrSz = sizeof(sockaddr);
+
+						result->error = recvfrom(socket->m_iSocket, buffer, 1500, 0, &addr, &addrSz);
+
+						if(result->error == 0)
+						{
+							// No Data
+							free(buffer);
+							break;
+						}
+
+						if(result->error >= 0)
+							buffer[result->error] = '\0';
+						else
+							buffer[0] = '\0';
+
+						result->data = buffer;
+
+						free(buffer);
+
+						result->peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
+						result->peer += ":";
+						char number[16] = {0};
+						sprintf(number, "%d", ((sockaddr_in *)&addr)->sin_port);
+						result->peer += number;
 
 						result->error = socket->CheckError(result->error, 0);
 
