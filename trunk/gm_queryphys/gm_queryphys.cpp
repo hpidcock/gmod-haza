@@ -48,7 +48,7 @@ ILuaObject *MakeVector(Vector &vec)
 	*/
 }
 
-LUA_FUNCTION(GetMesh)
+LUA_FUNCTION(GetConvexCount)
 {
 	g_Lua->CheckType(1, GLua::TYPE_PHYSOBJ);
 
@@ -70,33 +70,56 @@ LUA_FUNCTION(GetMesh)
 
 	if(queryModel)
 	{
-		int convexCount = queryModel->ConvexCount();
-		int triangleCount = 0;
+		g_Lua->Push((float)queryModel->ConvexCount());
+		physcol->DestroyQueryModel(queryModel);
+		return 1;
+	}
 
-		for(int i = 0; i < convexCount; i++)
-		{
-			triangleCount += queryModel->TriangleCount(i);
-		}
+	return 0;
+};
+
+LUA_FUNCTION(GetConvexMesh)
+{
+	g_Lua->CheckType(1, GLua::TYPE_PHYSOBJ);
+	g_Lua->CheckType(2, GLua::TYPE_NUMBER);
+
+	IPhysicsObject *physObj = (IPhysicsObject *)g_Lua->GetUserData(1);
+	
+	if(!physObj)
+	{
+		return 0;
+	}
+
+	const CPhysCollide *collide = physObj->GetCollide();
+
+	if(!collide)
+	{
+		return 0;
+	}
+
+	ICollisionQuery *queryModel = physcol->CreateQueryModel(const_cast<CPhysCollide *>(collide));
+
+	if(queryModel)
+	{
+		int convexCount = queryModel->ConvexCount();
+		int convex = g_Lua->GetInteger(2);
+
+		if(convex >= convexCount)
+			return 0;
+
+		int triangleCount = queryModel->TriangleCount(convex);
 
 		Triangle *triangles = (Triangle *)malloc(triangleCount * sizeof(Triangle));
 
-		int tri = 0;
-
-		for(int i = 0; i < convexCount; i++)
+		for(int i = 0; i < triangleCount; i++)
 		{
-			int triangleItorCount = queryModel->TriangleCount(i);
-			for(int j = 0; j < triangleItorCount; j++)
-			{
-				queryModel->GetTriangleVerts(i, j, (Vector *)&triangles[tri]);
-				tri++;
-			}
+			queryModel->GetTriangleVerts(convex, i, (Vector *)&triangles[i]);
 		}
 		
 		physcol->DestroyQueryModel(queryModel);
 
 		AutoUnRef retTable = g_Lua->GetNewTable();
 
-		int index = 1;
 		for(int i = 0; i < triangleCount; i++)
 		{
 			AutoUnRef tbl = g_Lua->GetNewTable();
@@ -111,9 +134,7 @@ LUA_FUNCTION(GetMesh)
 			tbl->SetMember(2, objB);
 			tbl->SetMember(3, objC);
 
-			retTable->SetMember(index, tbl);
-
-			index++;
+			retTable->SetMember(i+1, tbl);
 		}
 
 		retTable->Push();
@@ -138,12 +159,13 @@ int open()
 	}
 
 	AutoUnRef physMeta = g_Lua->GetMetaTable("PhysObj", GLua::TYPE_PHYSOBJ);
-	physMeta->SetMember("GetMesh", GetMesh);
+	physMeta->SetMember("GetConvexMesh", GetConvexMesh);
+	physMeta->SetMember("GetConvexCount", GetConvexCount);
 
 	return 0;
-}
+};
 
 int close()
 {
 	return 0;
-}
+};
