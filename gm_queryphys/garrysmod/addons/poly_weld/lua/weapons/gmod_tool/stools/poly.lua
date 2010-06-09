@@ -117,6 +117,12 @@ function TOOL:Reload( trace )
 	ent:BuildWeld(entList)
 	ent:Spawn()
 	
+	if(SPropProtection) then
+	
+		SPropProtection.PlayerMakePropOwner(self:GetOwner(), ent)
+		
+	end
+	
 	undo.Create("prop")
 		
 		undo.AddEntity(ent)
