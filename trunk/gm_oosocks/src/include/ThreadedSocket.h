@@ -61,7 +61,7 @@
 #define __THREADEDSOCKET_H__
 
 class CThreadedSocket;
-extern std::vector<CThreadedSocket *> sockets;
+extern std::vector<CThreadedSocket *> *sockets[2];
 
 class CMutexLock
 {
@@ -189,11 +189,14 @@ public:
 
 	bool CanDelete()
 	{
-		return m_iRefCount <= 0 && m_inCalls.size() == 0 && m_inCallsRecv.size() == 0 && m_outResults.size() == 0;
+		// We ignore Recv Calls.
+		return m_iRefCount <= 0 && m_inCalls.size() == 0 && m_outResults.size() == 0;
 	};
 
-	CThreadedSocket(int protocol)
+	CThreadedSocket(lua_State *L, int protocol)
 	{
+		this->L = L;
+
 		m_iRefCount = 0;
 
 		m_Callback = -1;
@@ -216,11 +219,20 @@ public:
 		pthread_create(&m_Thread, NULL, &ThreadProc, this);
 #endif
 
-		sockets.push_back(this);
+		if(Lua()->IsClient())
+		{
+			sockets[0]->push_back(this);
+		}
+		else
+		{
+			sockets[1]->push_back(this);
+		}
 	};
 
-	CThreadedSocket(int sock, bool x)
+	CThreadedSocket(lua_State *L, int sock, bool x)
 	{	
+		this->L = L;
+
 		m_iRefCount = 0;
 
 		m_Callback = -1;
@@ -238,17 +250,33 @@ public:
 		pthread_create(&m_Thread, NULL, &ThreadProc, this);
 #endif
 
-		sockets.push_back(this);
+		if(Lua()->IsClient())
+		{
+			sockets[0]->push_back(this);
+		}
+		else
+		{
+			sockets[1]->push_back(this);
+		}
 	};
 
 	~CThreadedSocket(void)
 	{
-		std::vector<CThreadedSocket *>::iterator itor = sockets.begin();
-		while(itor != sockets.end())
+		std::vector<CThreadedSocket *> *socketsList = NULL;
+		if(Lua()->IsClient())
+		{
+			socketsList = sockets[0];
+		}
+		else
+		{
+			socketsList = sockets[1];
+		}
+		std::vector<CThreadedSocket *>::iterator itor = socketsList->begin();
+		while(itor != socketsList->end())
 		{
 			if((*itor) == this)
 			{
-				sockets.erase(itor);
+				socketsList->erase(itor);
 				break;
 			}
 
@@ -257,7 +285,7 @@ public:
 
 		if(m_Callback != -1)
 		{
-			g_Lua->FreeReference(m_Callback);
+			Lua()->FreeReference(m_Callback);
 			m_Callback = -1;
 		}
 
@@ -450,31 +478,31 @@ public:
 		{
 			if(m_Callback != -1)
 			{
-				AutoUnRef meta = g_Lua->GetMetaTable(MT_SOCKET, TYPE_SOCKET);
+				AutoUnRef meta = Lua()->GetMetaTable(MT_SOCKET, TYPE_SOCKET);
 				this->Ref();
 
-				g_Lua->PushReference(m_Callback);
-				g_Lua->PushUserData(meta, static_cast<void *>(this));
-				g_Lua->Push((float)result->call);
-				g_Lua->Push((float)result->callId);
-				g_Lua->Push((float)result->error);
+				Lua()->PushReference(m_Callback);
+				Lua()->PushUserData(meta, static_cast<void *>(this));
+				Lua()->Push((float)result->call);
+				Lua()->Push((float)result->callId);
+				Lua()->Push((float)result->error);
 				if(result->call == SOCK_CALL::ACCEPT)
 				{
 					if(result->error == SOCK_ERROR::OK)
 					{
-						CThreadedSocket *newSock = new CThreadedSocket(result->secondary, true);
+						CThreadedSocket *newSock = new CThreadedSocket(L, result->secondary, true);
 						newSock->Ref();
-						g_Lua->PushUserData(meta, static_cast<void *>(newSock));
+						Lua()->PushUserData(meta, static_cast<void *>(newSock));
 					}
 					else
-						g_Lua->Push(false);
+						Lua()->Push(false);
 				}
 				else
 				{
-					g_Lua->Push(result->data.c_str());
+					Lua()->Push(result->data.c_str());
 				}
-				g_Lua->Push(result->peer.c_str());
-				g_Lua->Call(6, 0);
+				Lua()->Push(result->peer.c_str());
+				Lua()->Call(6, 0);
 			}
 			delete result;
 		}
@@ -994,6 +1022,8 @@ protected:
 	};
 
 private:
+	lua_State *L;
+
 	bool m_bRunning;
 
 	int m_iSocket;
