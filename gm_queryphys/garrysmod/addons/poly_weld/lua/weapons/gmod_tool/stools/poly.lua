@@ -13,9 +13,9 @@ TOOL.ConfigName		= nil
 
 if(CLIENT) then
 
-	language.Add("Poly_weld", "Poly Weld")
-	language.Add("Tool_poly_name", "Poly Weld")
-	language.Add("Tool_poly_desc", "Permanent Welds")
+	language.Add("Poly_weld", "Weld - Poly")
+	language.Add("Tool_poly_name", "Weld - Poly")
+	language.Add("Tool_poly_desc", "Permanent Poly Welds")
 	language.Add("Tool_poly_0", "Left Click to Select    Right Click to Deselect    Reload to Create Weld")
 	
 end
@@ -48,7 +48,7 @@ function TOOL:LeftClick( trace )
 	end
 	
 	return true
-		
+
 end
 
 /*---------------------------------------------------------
