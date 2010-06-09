@@ -11,15 +11,24 @@ TOOL.Name			= "#Poly_Weld"
 TOOL.Command		= nil
 TOOL.ConfigName		= nil
 
+if(CLIENT) then
+
+	language.Add("Poly_weld", "Poly Weld")
+	language.Add("Tool_poly_name", "Poly Weld")
+	language.Add("Tool_poly_desc", "Permanent Welds")
+	language.Add("Tool_poly_0", "Left Click to Select    Right Click to Deselect    Reload to Create Weld")
+	
+end
+
 /*---------------------------------------------------------
    Name:	LeftClick
-   Desc:	Remove a single entity
+   Desc:	Select
 ---------------------------------------------------------*/  
 function TOOL:LeftClick( trace )
 
-	if (!trace.Entity) then return false end
-	if (!trace.Entity:IsValid()) then return false end
-	if (trace.Entity:IsPlayer()) then return false end
+	if(!trace.Entity) then return false end
+	if(!trace.Entity:IsValid()) then return false end
+	if(trace.Entity:IsPlayer()) then return false end
 	
 	if(CLIENT) then return true end
 
@@ -29,8 +38,12 @@ function TOOL:LeftClick( trace )
 	
 	for _, v in pairs(entList) do
 	
-		v:SetColor(255, 0, 0, 255)
-		self.Selected[v] = true
+		if(ValidEntity(v)) then
+		
+			v:SetColor(255, 0, 0, 255)
+			self.Selected[v] = true
+			
+		end
 		
 	end
 	
@@ -40,23 +53,28 @@ end
 
 /*---------------------------------------------------------
    Name:	RightClick
-   Desc:	Remove this entity and everything constrained
+   Desc:	Deselect
 ---------------------------------------------------------*/  
 function TOOL:RightClick( trace )
 
-	if (!trace.Entity) then return false end
-	if (!trace.Entity:IsValid()) then return false end
-	if (trace.Entity:IsPlayer()) then return false end
+	if(!trace.Entity) then return false end
+	if(!trace.Entity:IsValid()) then return false end
+	if(trace.Entity:IsPlayer()) then return false end
 
 	if(CLIENT) then return true end
 
-	local entList = constraint.GetAllConstrainedEntities( trace.Entity )
+	local entList = constraint.GetAllConstrainedEntities(trace.Entity)
 	
 	self.Selected = self.Selected or {}
 	
 	for _, v in pairs(entList) do
 	
-		v:SetColor(255, 255, 255, 255)
+		if(ValidEntity(v)) then
+		
+			v:SetColor(255, 255, 255, 255)
+			
+		end
+		
 		self.Selected[v] = nil
 		
 	end
@@ -65,9 +83,15 @@ function TOOL:RightClick( trace )
 	
 end
 
+/*---------------------------------------------------------
+   Name:	Reload
+   Desc:	Create Weld
+---------------------------------------------------------*/  
 function TOOL:Reload( trace )
 
 	if(CLIENT) then return true end
+	
+	if(table.Count(self.Selected) <= 1) then return end
 
 	local entList = {}
 
@@ -88,6 +112,7 @@ function TOOL:Reload( trace )
 	self.Selected = {}
 	
 	local ent = ents.Create("gmod_poly")
+	
 	ent:SetPos(trace.HitPos)
 	ent:BuildWeld(entList)
 	ent:Spawn()

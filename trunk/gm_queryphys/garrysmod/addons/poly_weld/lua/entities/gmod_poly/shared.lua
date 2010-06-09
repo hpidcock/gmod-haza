@@ -9,7 +9,7 @@
 ENT.Type = "anim"
 ENT.Base = "base_gmodentity"
 
-ENT.PrintName		= "Ploy Weld"
+ENT.PrintName		= "Poly Weld"
 ENT.Author			= "Sir Haza"
 ENT.Contact			= ""
 ENT.Purpose			= ""
