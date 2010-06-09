@@ -211,6 +211,7 @@ public:
 
 #ifdef WIN32
 		m_Thread = CreateThread(NULL, NULL, &ThreadProc, this, NULL, NULL);
+		m_hClose = CreateEvent(NULL, true, false, NULL);
 #else
 		pthread_create(&m_Thread, NULL, &ThreadProc, this);
 #endif
@@ -232,6 +233,7 @@ public:
 
 #ifdef WIN32
 		m_Thread = CreateThread(NULL, NULL, &ThreadProc, this, NULL, NULL);
+		m_hClose = CreateEvent(NULL, true, false, NULL);
 #else
 		pthread_create(&m_Thread, NULL, &ThreadProc, this);
 #endif
@@ -261,18 +263,14 @@ public:
 
 		m_bRunning = false;
 #ifdef WIN32
-		DWORD exit = NULL;
-		GetExitCodeThread(m_Thread, &exit);
-		TerminateThread(m_Thread, exit);
+		WaitForSingleObject(m_hClose, INFINITE);
+		CloseHandle(m_hClose);
+		CloseHandle(m_Thread);
 #else
 		pthread_cancel(m_Thread);
 #endif
 
-#ifdef WIN32
-		closesocket(m_iSocket);		
-#else
-		close(m_iSocket);
-#endif
+		Close();
 
 		SOCK_CALL::SockCall *cleanupCall = NULL;
 		while((cleanupCall = PopCall()) != NULL)
@@ -488,6 +486,15 @@ public:
 	void SetCallback(int i)
 	{
 		m_Callback = i;
+	};
+
+	void Close(void)
+	{
+		#ifdef WIN32
+			closesocket(m_iSocket);		
+		#else
+			close(m_iSocket);
+		#endif
 	};
 
 protected:
@@ -981,6 +988,8 @@ protected:
 #endif
 		}
 
+		SetEvent(socket->m_hClose);
+
 		return NULL;
 	};
 
@@ -1002,6 +1011,7 @@ private:
 
 #ifdef WIN32
 	HANDLE m_Thread;
+	HANDLE m_hClose;
 #else
 	pthread_t m_Thread;
 #endif

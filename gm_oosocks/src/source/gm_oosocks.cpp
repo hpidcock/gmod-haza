@@ -195,6 +195,20 @@ namespace OOSock
 		return 1;
 	}
 
+	LUA_FUNCTION(Close)
+	{
+		g_Lua->CheckType(1, TYPE_SOCKET);
+
+		CThreadedSocket *sock = reinterpret_cast<CThreadedSocket *>(g_Lua->GetUserData(1));
+
+		if(sock == NULL)
+			return 0;
+
+		sock->Close();
+
+		return 0;
+	}
+
 	LUA_FUNCTION(ReceiveDatagram)
 	{
 		g_Lua->CheckType(1, TYPE_SOCKET);
@@ -244,6 +258,7 @@ int Init(void)
 		__index->SetMember("ReceiveLine", OOSock::ReceiveLine);
 		__index->SetMember("ReceiveDatagram", OOSock::ReceiveDatagram);
 		__index->SetMember("SetCallback", OOSock::SetCallback);
+		__index->SetMember("Close", OOSock::Close);
 
 		meta->SetMember("__index", __index);
 	}
