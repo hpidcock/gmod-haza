@@ -11,6 +11,7 @@
 #include <stdarg.h>
 
 #include "ILuaInterface.h"
+#include "ILuaObject.h"
 
 #ifdef WIN32
 #undef GetObject

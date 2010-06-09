@@ -41,7 +41,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="X:\SrcSDK\src\public;X:\SrcSDK\src\public\tier0;X:\SrcSDK\src\public\tier1;X:\SrcSDK\src\public\tier2;X:\SrcSDK\src\public\tier3"
+				AdditionalIncludeDirectories="X:\SrcSDK2\common;X:\SrcSDK2\game\shared;X:\SrcSDK2\game\server;X:\SrcSDK2\public;X:\SrcSDK2\public\tier0;X:\SrcSDK2\public\tier1;X:\SrcSDK2\public\tier2;X:\SrcSDK2\public\tier3"
 				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_USRDLL;GM_QUERYPHYS_EXPORTS"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -61,9 +61,9 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="tier0.lib tier1.lib"
+				AdditionalDependencies="tier0.lib tier1.lib psapi.lib"
 				LinkIncremental="2"
-				AdditionalLibraryDirectories="X:\SrcSDK\src\lib\public"
+				AdditionalLibraryDirectories="X:\SrcSDK2\lib\public"
 				IgnoreDefaultLibraryNames="libcmt"
 				GenerateDebugInformation="true"
 				SubSystem="2"
@@ -118,7 +118,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
-				AdditionalIncludeDirectories="X:\SrcSDK\src\public;X:\SrcSDK\src\public\tier0;X:\SrcSDK\src\public\tier1;X:\SrcSDK\src\public\tier2;X:\SrcSDK\src\public\tier3"
+				AdditionalIncludeDirectories="X:\SrcSDK2\common;X:\SrcSDK2\game\shared;X:\SrcSDK2\game\server;X:\SrcSDK2\public;X:\SrcSDK2\public\tier0;X:\SrcSDK2\public\tier1;X:\SrcSDK2\public\tier2;X:\SrcSDK2\public\tier3"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_USRDLL;GM_QUERYPHYS_EXPORTS"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
@@ -139,7 +139,7 @@
 				Name="VCLinkerTool"
 				AdditionalDependencies="tier0.lib tier1.lib"
 				LinkIncremental="1"
-				AdditionalLibraryDirectories="X:\SrcSDK\src\lib\public"
+				AdditionalLibraryDirectories="X:\SrcSDK2\lib\public"
 				IgnoreDefaultLibraryNames="libcmt"
 				GenerateDebugInformation="true"
 				SubSystem="2"
