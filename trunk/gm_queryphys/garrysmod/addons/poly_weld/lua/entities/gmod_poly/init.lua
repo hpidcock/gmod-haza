@@ -24,7 +24,7 @@ function ENT:Initialize()
 	self:SetMoveType( MOVETYPE_VPHYSICS )
 	self:SetSolid( SOLID_VPHYSICS )
 	
-	if( self.Mesh ) then
+	if( self.Mesh && table.Count(self.Mesh) > 0 ) then
 	
 		local phys = self:GetPhysicsObject()
 		
