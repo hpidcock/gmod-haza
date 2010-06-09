@@ -1,0 +1,10 @@
+"AddonInfo"
+{
+	"name"		"Poly Weld"
+	"version"	"SVN"
+	"up_date"	"SVN"
+	"author_name"	"Sir Haza"
+	"author_email"	""
+	"author_url"	""
+	"info"		"Poly Weld"
+}
