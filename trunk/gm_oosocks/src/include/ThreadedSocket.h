@@ -29,7 +29,6 @@
 #define TYPE_SOCKET 9753
 
 #include "GMLuaModule.h"
-#include "AutoUnRef.h"
 
 #ifdef WIN32
 	#include <Windows.h>
@@ -478,7 +477,7 @@ public:
 		{
 			if(m_Callback != -1)
 			{
-				AutoUnRef meta = Lua()->GetMetaTable(MT_SOCKET, TYPE_SOCKET);
+				CAutoUnRef meta = Lua()->GetMetaTable(MT_SOCKET, TYPE_SOCKET);
 				this->Ref();
 
 				Lua()->PushReference(m_Callback);

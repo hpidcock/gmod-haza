@@ -27,7 +27,7 @@ namespace OOSock
 
 		CThreadedSocket *sock = new CThreadedSocket(L, proto);
 
-		AutoUnRef meta = Lua()->GetMetaTable(MT_SOCKET, TYPE_SOCKET);
+		CAutoUnRef meta = Lua()->GetMetaTable(MT_SOCKET, TYPE_SOCKET);
 		sock->Ref();
 		Lua()->PushUserData(meta, static_cast<void *>(sock));
 
@@ -265,9 +265,9 @@ int Init(lua_State* L)
 	WSAStartup(MAKEWORD(2, 0), &wsa_data);
 #endif
 
-	AutoUnRef meta = Lua()->GetMetaTable(MT_SOCKET, TYPE_SOCKET);
+	CAutoUnRef meta = Lua()->GetMetaTable(MT_SOCKET, TYPE_SOCKET);
 	{
-		AutoUnRef __index = Lua()->GetNewTable();
+		CAutoUnRef __index = Lua()->GetNewTable();
 
 		__index->SetMember("Bind", OOSock::Bind);
 		__index->SetMember("Listen", OOSock::Listen);
@@ -304,8 +304,8 @@ int Init(lua_State* L)
 	Lua()->SetGlobal("SCKCALL_SEND", (float)SOCK_CALL::SEND);
 	Lua()->SetGlobal("SCKCALL_REC_DATAGRAM", (float)SOCK_CALL::REC_DATAGRAM);
 
-	AutoUnRef hookSystem = Lua()->GetGlobal("hook");
-	AutoUnRef hookAdd = hookSystem->GetMember("Add");
+	CAutoUnRef hookSystem = Lua()->GetGlobal("hook");
+	CAutoUnRef hookAdd = hookSystem->GetMember("Add");
 	
 	hookAdd->Push();
 	Lua()->Push("Think");
