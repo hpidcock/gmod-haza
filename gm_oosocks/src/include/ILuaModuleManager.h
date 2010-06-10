@@ -25,6 +25,7 @@ class ILuaModuleManager
 
 extern ILuaModuleManager* modulemanager;
 
+#define g_Lua modulemanager->GetLuaInterface( L )
 #define Lua() modulemanager->GetLuaInterface( L )
 
 #endif // ILUAMODULEMANAGER_H
