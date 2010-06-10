@@ -495,13 +495,18 @@ public:
 					}
 					else
 						Lua()->Push(false);
+
+					Lua()->Push(result->data.c_str());
+					Lua()->Push(result->peer.c_str());
+					Lua()->PushNil();
 				}
 				else
 				{
 					Lua()->Push(result->data.c_str());
+					Lua()->Push(result->peer.c_str());
+					Lua()->Push((float)result->secondary);
 				}
-				Lua()->Push(result->peer.c_str());
-				Lua()->Call(6, 0);
+				Lua()->Call(7, 0);
 			}
 			delete result;
 		}
@@ -719,10 +724,7 @@ protected:
 						free(buffer);
 
 						result->peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
-						result->peer += ":";
-						char number[16] = {0};
-						sprintf(number, "%d", ((sockaddr_in *)&addr)->sin_port);
-						result->peer += number;
+						result->secondary = ((sockaddr_in *)&addr)->sin_port;
 
 						result->error = socket->CheckError(result->error, 0);
 
@@ -774,10 +776,7 @@ protected:
 						}
 
 						result->peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
-						result->peer += ":";
-						char number[16] = {0};
-						sprintf(number, "%d", ((sockaddr_in *)&addr)->sin_port);
-						result->peer += number;
+						result->secondary = ((sockaddr_in *)&addr)->sin_port;
 
 						result->error = socket->CheckError(result->error, 0);
 
@@ -835,10 +834,7 @@ protected:
 						free(buffer);
 
 						result->peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
-						result->peer += ":";
-						char number[16] = {0};
-						sprintf(number, "%d", ((sockaddr_in *)&addr)->sin_port);
-						result->peer += number;
+						result->secondary = ((sockaddr_in *)&addr)->sin_port;
 
 						result->error = socket->CheckError(result->error, 0);
 
