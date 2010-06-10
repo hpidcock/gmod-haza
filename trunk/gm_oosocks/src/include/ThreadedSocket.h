@@ -1011,7 +1011,9 @@ protected:
 #endif
 		}
 
+#ifdef WIN32
 		SetEvent(socket->m_hClose);
+#endif
 
 		return NULL;
 	};
