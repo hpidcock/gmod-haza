@@ -724,7 +724,7 @@ protected:
 						free(buffer);
 
 						result->peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
-						result->secondary = ((sockaddr_in *)&addr)->sin_port;
+						result->secondary = ntohs(((sockaddr_in *)&addr)->sin_port);
 
 						result->error = socket->CheckError(result->error, 0);
 
@@ -776,7 +776,7 @@ protected:
 						}
 
 						result->peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
-						result->secondary = ((sockaddr_in *)&addr)->sin_port;
+						result->secondary = ntohs(((sockaddr_in *)&addr)->sin_port);
 
 						result->error = socket->CheckError(result->error, 0);
 
@@ -834,7 +834,7 @@ protected:
 						free(buffer);
 
 						result->peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
-						result->secondary = ((sockaddr_in *)&addr)->sin_port;
+						result->secondary = ntohs(((sockaddr_in *)&addr)->sin_port);
 
 						result->error = socket->CheckError(result->error, 0);
 
