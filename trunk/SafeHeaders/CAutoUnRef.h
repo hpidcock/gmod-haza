@@ -48,10 +48,6 @@ public:
 
 private:
 	ILuaObject *m_pLuaObj;
-	
-	CAutoUnRef(const CAutoUnRef &other)
-	{
-	};
 };
 
 #endif // CAUTOUNREF_H
