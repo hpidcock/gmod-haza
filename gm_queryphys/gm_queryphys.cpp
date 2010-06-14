@@ -1,7 +1,7 @@
 #undef _UNICODE
 
 #include "GMLuaModule.h"
-#include "AutoUnRef.h"
+#include "CAutoUnRef.h"
 
 #include "interface.h"
 #include "eiface.h"
@@ -14,7 +14,7 @@
 
 GMOD_MODULE(open, close);
 
-static IPhysicsCollision *physcol = NULL;
+static IPhysicsCollision *physcollision = NULL;
 static IPhysicsEnvironment *physenv = NULL;
 static IPhysics *physics = NULL;
 
@@ -48,8 +48,6 @@ size_t UTIL_DataFromName( datamap_t *pMap, const char *pName )
 		pMap = pMap->baseMap;
 	}
 
-	g_Lua->Error("UTIL_DataFromName -> Could not find field.\n");
-
 	return NULL;
 }
 
@@ -69,34 +67,32 @@ fieldtype_t UTIL_FieldTypeFromName( datamap_t *pMap, const char *pName )
 		pMap = pMap->baseMap;
 	}
 
-	g_Lua->Error("UTIL_FieldTypeFromName -> Could not find field.\n");
-
 	return FIELD_VOID;
 }
 
-ILuaObject *MakeVector(Vector &vec)
+ILuaObject *MakeVector(lua_State *L, Vector &vec)
 {
-	AutoUnRef vecCreate = g_Lua->GetGlobal("Vector");
+	CAutoUnRef vecCreate = Lua()->GetGlobal("Vector");
 	
 	vecCreate->Push();
 	
-	g_Lua->Push(vec.x);
-	g_Lua->Push(vec.y);
-	g_Lua->Push(vec.z);
+	Lua()->Push(vec.x);
+	Lua()->Push(vec.y);
+	Lua()->Push(vec.z);
 	
-	g_Lua->Call(3, 1);
+	Lua()->Call(3, 1);
 
-	return g_Lua->GetReturn(0);
+	return Lua()->GetReturn(0);
 
 	// I would use Vector as userdata, but it crashes ^.^
 	/*
-	AutoUnRef vecMeta = g_Lua->GetMetaTable("Vector", GLua::TYPE_VECTOR);
+	CAutoUnRef vecMeta = Lua()->GetMetaTable("Vector", GLua::TYPE_VECTOR);
 
-	g_Lua->PushUserData(vecMeta, new Vector(vec));
+	Lua()->PushUserData(vecMeta, new Vector(vec));
 
-	ILuaObject *obj = g_Lua->GetObject();
+	ILuaObject *obj = Lua()->GetObject();
 
-	g_Lua->Pop();
+	Lua()->Pop();
 
 	return obj;
 	*/
@@ -104,9 +100,9 @@ ILuaObject *MakeVector(Vector &vec)
 
 LUA_FUNCTION(GetConvexCount)
 {
-	g_Lua->CheckType(1, GLua::TYPE_PHYSOBJ);
+	Lua()->CheckType(1, GLua::TYPE_PHYSOBJ);
 
-	IPhysicsObject *physObj = (IPhysicsObject *)g_Lua->GetUserData(1);
+	IPhysicsObject *physObj = (IPhysicsObject *)Lua()->GetUserData(1);
 	
 	if(!physObj)
 	{
@@ -120,12 +116,12 @@ LUA_FUNCTION(GetConvexCount)
 		return 0;
 	}
 
-	ICollisionQuery *queryModel = physcol->CreateQueryModel(const_cast<CPhysCollide *>(collide));
+	ICollisionQuery *queryModel = physcollision->CreateQueryModel(const_cast<CPhysCollide *>(collide));
 
 	if(queryModel)
 	{
-		g_Lua->Push((float)queryModel->ConvexCount());
-		physcol->DestroyQueryModel(queryModel);
+		Lua()->Push((float)queryModel->ConvexCount());
+		physcollision->DestroyQueryModel(queryModel);
 		return 1;
 	}
 
@@ -134,10 +130,10 @@ LUA_FUNCTION(GetConvexCount)
 
 LUA_FUNCTION(GetConvexMesh)
 {
-	g_Lua->CheckType(1, GLua::TYPE_PHYSOBJ);
-	g_Lua->CheckType(2, GLua::TYPE_NUMBER);
+	Lua()->CheckType(1, GLua::TYPE_PHYSOBJ);
+	Lua()->CheckType(2, GLua::TYPE_NUMBER);
 
-	IPhysicsObject *physObj = (IPhysicsObject *)g_Lua->GetUserData(1);
+	IPhysicsObject *physObj = (IPhysicsObject *)Lua()->GetUserData(1);
 	
 	if(!physObj)
 	{
@@ -151,12 +147,12 @@ LUA_FUNCTION(GetConvexMesh)
 		return 0;
 	}
 
-	ICollisionQuery *queryModel = physcol->CreateQueryModel(const_cast<CPhysCollide *>(collide));
+	ICollisionQuery *queryModel = physcollision->CreateQueryModel(const_cast<CPhysCollide *>(collide));
 
 	if(queryModel)
 	{
 		int convexCount = queryModel->ConvexCount();
-		int convex = g_Lua->GetInteger(2);
+		int convex = Lua()->GetInteger(2);
 
 		if(convex >= convexCount)
 			return 0;
@@ -170,19 +166,19 @@ LUA_FUNCTION(GetConvexMesh)
 			queryModel->GetTriangleVerts(convex, i, (Vector *)&triangles[i]);
 		}
 
-		physcol->DestroyQueryModel(queryModel);
+		physcollision->DestroyQueryModel(queryModel);
 
-		AutoUnRef retTable = g_Lua->GetNewTable();
+		CAutoUnRef retTable = Lua()->GetNewTable();
 
 		for(int i = 0; i < triangleCount; i++)
 		{
-			AutoUnRef tbl = g_Lua->GetNewTable();
+			CAutoUnRef tbl = Lua()->GetNewTable();
 
 			Triangle &triangle = triangles[i];
 
-			AutoUnRef objA = MakeVector(triangle.a);
-			AutoUnRef objB = MakeVector(triangle.b);
-			AutoUnRef objC = MakeVector(triangle.c);
+			CAutoUnRef objA = MakeVector(L, triangle.a);
+			CAutoUnRef objB = MakeVector(L, triangle.b);
+			CAutoUnRef objC = MakeVector(L, triangle.c);
 
 			tbl->SetMember(1, objA);
 			tbl->SetMember(2, objB);
@@ -202,17 +198,17 @@ LUA_FUNCTION(GetConvexMesh)
 
 LUA_FUNCTION(RebuildFromConvexs)
 {
-	g_Lua->CheckType(1, GLua::TYPE_PHYSOBJ);
-	g_Lua->CheckType(2, GLua::TYPE_VECTOR);
-	g_Lua->CheckType(3, GLua::TYPE_ANGLE);
-	g_Lua->CheckType(4, GLua::TYPE_NUMBER);
-	g_Lua->CheckType(5, GLua::TYPE_NUMBER);
-	g_Lua->CheckType(6, GLua::TYPE_NUMBER);
-	g_Lua->CheckType(7, GLua::TYPE_NUMBER);
-	g_Lua->CheckType(8, GLua::TYPE_NUMBER);
-	g_Lua->CheckType(9, GLua::TYPE_TABLE);
+	Lua()->CheckType(1, GLua::TYPE_PHYSOBJ);
+	Lua()->CheckType(2, GLua::TYPE_VECTOR);
+	Lua()->CheckType(3, GLua::TYPE_ANGLE);
+	Lua()->CheckType(4, GLua::TYPE_NUMBER);
+	Lua()->CheckType(5, GLua::TYPE_NUMBER);
+	Lua()->CheckType(6, GLua::TYPE_NUMBER);
+	Lua()->CheckType(7, GLua::TYPE_NUMBER);
+	Lua()->CheckType(8, GLua::TYPE_NUMBER);
+	Lua()->CheckType(9, GLua::TYPE_TABLE);
 	
-	CUtlLuaVector *table = g_Lua->GetAllTableMembers(9);
+	CUtlLuaVector *table = Lua()->GetAllTableMembers(9);
 
 	int convexCount = table->Count();
 	CPhysConvex **convexList = (CPhysConvex **)malloc(sizeof(CPhysConvex *) * convexCount);
@@ -221,18 +217,18 @@ LUA_FUNCTION(RebuildFromConvexs)
 	{
 		LuaKeyValue &kv = table->Element(i);
 
-		g_Lua->Push(kv.pValue);
+		Lua()->Push(kv.pValue);
 
-		if(g_Lua->GetType(-1) != GLua::TYPE_TABLE)
+		if(Lua()->GetType(-1) != GLua::TYPE_TABLE)
 		{
-			g_Lua->Pop();
-			g_Lua->DeleteLuaVector(table);
-			g_Lua->Error("Convex is not a table.");
+			Lua()->Pop();
+			Lua()->DeleteLuaVector(table);
+			Lua()->Error("PhysObj:RebuildFromConvexs convex is not a table.\n");
 			return 0;
 		}
 
-		CUtlLuaVector *convexTable = g_Lua->GetAllTableMembers(-1);
-		g_Lua->Pop();
+		CUtlLuaVector *convexTable = Lua()->GetAllTableMembers(-1);
+		Lua()->Pop();
 
 		Vector **pointCloud = (Vector **)malloc(convexTable->Count() * sizeof(Vector *) * 3);
 
@@ -241,55 +237,66 @@ LUA_FUNCTION(RebuildFromConvexs)
 		for(int j = 0; j < convexTable->Count(); j++)
 		{
 			LuaKeyValue &ckv = convexTable->Element(j);
-			AutoUnRef a = ckv.pValue->GetMember(1);
-			AutoUnRef b = ckv.pValue->GetMember(2);
-			AutoUnRef c = ckv.pValue->GetMember(3);
+			CAutoUnRef a = ckv.pValue->GetMember(1);
+			CAutoUnRef b = ckv.pValue->GetMember(2);
+			CAutoUnRef c = ckv.pValue->GetMember(3);
 
 			if(a->GetType() != GLua::TYPE_VECTOR ||
 				b->GetType() != GLua::TYPE_VECTOR ||
 				c->GetType() != GLua::TYPE_VECTOR)
 			{
-				g_Lua->DeleteLuaVector(convexTable);
-				g_Lua->DeleteLuaVector(table);
+				Lua()->DeleteLuaVector(convexTable);
+				Lua()->DeleteLuaVector(table);
 				free(pointCloud);
-				g_Lua->Error("Triangle contains non vector. Or incorrect order.");
+				Lua()->Error("PhysObj:RebuildFromConvexs got a Triangle that contains a non vector. Or incorrect order.\n");
 				return 0;
 			}
 
 			pointCloud[v++] = (Vector *)a->GetUserData();
 			pointCloud[v++] = (Vector *)b->GetUserData();
 			pointCloud[v++] = (Vector *)c->GetUserData();
+
+			if(pointCloud[v-1] == pointCloud[v-2] ||
+				pointCloud[v-2] == pointCloud[v-3] ||
+				pointCloud[v-3] == pointCloud[v-1])
+			{
+				Lua()->DeleteLuaVector(convexTable);
+				Lua()->DeleteLuaVector(table);
+				free(pointCloud);
+				Lua()->Error("PhysObj:RebuildFromConvexs got a Triangle that contains equal vertices.\n");
+				return 0;
+			}
 		}
 
-		convexList[i] = physcol->ConvexFromVerts(pointCloud, convexTable->Count() * 3);
+		convexList[i] = physcollision->ConvexFromVerts(pointCloud, convexTable->Count() * 3);
 
 		free(pointCloud);
 
-		g_Lua->DeleteLuaVector(convexTable);
+		Lua()->DeleteLuaVector(convexTable);
 	}
 
-	g_Lua->DeleteLuaVector(table);
+	Lua()->DeleteLuaVector(table);
 
-	CPhysCollide *collide = physcol->ConvertConvexToCollide(convexList, convexCount);
+	CPhysCollide *collide = physcollision->ConvertConvexToCollide(convexList, convexCount);
 	
 	free(convexList);
 
 	objectparams_t params;
 	memset(&params, 0, sizeof(objectparams_t));
-	params.volume = physcol->CollideVolume(collide);
-	params.mass = g_Lua->GetNumber(4);
-	params.inertia = g_Lua->GetNumber(7);
+	params.volume = physcollision->CollideVolume(collide);
+	params.mass = Lua()->GetNumber(4);
+	params.inertia = Lua()->GetNumber(7);
 	params.enableCollisions = true;
-	params.damping = g_Lua->GetNumber(5);
-	params.rotInertiaLimit = g_Lua->GetNumber(8);
-	params.rotdamping = g_Lua->GetNumber(6);
+	params.damping = Lua()->GetNumber(5);
+	params.rotInertiaLimit = Lua()->GetNumber(8);
+	params.rotdamping = Lua()->GetNumber(6);
 
-	Vector pos = *((Vector *)g_Lua->GetUserData(2));
-	QAngle ang = *((QAngle *)g_Lua->GetUserData(3));
+	Vector pos = *((Vector *)Lua()->GetUserData(2));
+	QAngle ang = *((QAngle *)Lua()->GetUserData(3));
 
 	IPhysicsObject *newObj = physenv->CreatePolyObject(collide, 0, pos, ang, &params);
 
-	IPhysicsObject *old = (IPhysicsObject *)g_Lua->GetUserData(1);
+	IPhysicsObject *old = (IPhysicsObject *)Lua()->GetUserData(1);
 
 	CBaseEntity *ent = (CBaseEntity *)old->GetGameData();
 
@@ -298,6 +305,13 @@ LUA_FUNCTION(RebuildFromConvexs)
 	datamap_t *data = ent->GetDataDescMap();
 
 	size_t offset = UTIL_DataFromName(data, "m_pPhysicsObject");
+
+	if(offset == NULL)
+	{
+		physenv->DestroyObject(newObj);
+		Lua()->Error("PhysObj:RebuildFromConvexs got an Invalid entity.\n");
+		return 0;
+	}
 
 	IPhysicsObject **physObject = (IPhysicsObject **)((size_t)ent + offset);
 
@@ -311,14 +325,14 @@ LUA_FUNCTION(RebuildFromConvexs)
 	return 0;
 };
 
-int open()
+int open(lua_State *L)
 {
 	CreateInterfaceFn phys = Sys_GetFactory("vphysics.dll");
 
 	physics = (IPhysics *)phys(VPHYSICS_INTERFACE_VERSION, NULL);
-	physcol = (IPhysicsCollision *)phys(VPHYSICS_COLLISION_INTERFACE_VERSION, NULL);
+	physcollision = (IPhysicsCollision *)phys(VPHYSICS_COLLISION_INTERFACE_VERSION, NULL);
 
-	if(!physcol)
+	if(!physcollision)
 	{
 		Msg("Could not get IPhysicsCollision\n");
 		return 0;
@@ -338,7 +352,7 @@ int open()
 		return 0;
 	}
 
-	AutoUnRef physMeta = g_Lua->GetMetaTable("PhysObj", GLua::TYPE_PHYSOBJ);
+	CAutoUnRef physMeta = Lua()->GetMetaTable("PhysObj", GLua::TYPE_PHYSOBJ);
 	physMeta->SetMember("GetConvexMesh", GetConvexMesh);
 	physMeta->SetMember("GetConvexCount", GetConvexCount);
 	physMeta->SetMember("RebuildFromConvexs", RebuildFromConvexs);
@@ -346,7 +360,7 @@ int open()
 	return 0;
 };
 
-int close()
+int close(lua_State *L)
 {
 	return 0;
 };
