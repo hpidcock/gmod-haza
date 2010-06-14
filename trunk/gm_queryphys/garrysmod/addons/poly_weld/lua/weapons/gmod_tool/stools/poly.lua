@@ -29,6 +29,7 @@ function TOOL:LeftClick( trace )
 	if(!trace.Entity) then return false end
 	if(!trace.Entity:IsValid()) then return false end
 	if(trace.Entity:IsPlayer()) then return false end
+	if(trace.Entity:GetClass() != "prop_physics") then return false end
 	
 	if(CLIENT) then return true end
 
@@ -60,24 +61,19 @@ function TOOL:RightClick( trace )
 	if(!trace.Entity) then return false end
 	if(!trace.Entity:IsValid()) then return false end
 	if(trace.Entity:IsPlayer()) then return false end
+	if(trace.Entity:GetClass() != "prop_physics") then return false end
 
 	if(CLIENT) then return true end
 
-	local entList = constraint.GetAllConstrainedEntities(trace.Entity)
-	
 	self.Selected = self.Selected or {}
 	
-	for _, v in pairs(entList) do
-	
-		if(ValidEntity(v)) then
+	if(ValidEntity(trace.Entity)) then
 		
-			v:SetColor(255, 255, 255, 255)
+		trace.Entity:SetColor(255, 255, 255, 255)
 			
-		end
-		
-		self.Selected[v] = nil
-		
 	end
+		
+	self.Selected[trace.Entity] = nil
 	
 	return true
 	

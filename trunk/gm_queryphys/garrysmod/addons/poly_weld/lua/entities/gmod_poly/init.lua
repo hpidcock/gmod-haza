@@ -18,19 +18,19 @@ include( "shared.lua" )
    Name: Initialize
 ---------------------------------------------------------*/
 function ENT:Initialize()
-
-	self:SetModel( "models/dav0r/hoverball.mdl" )
-	self:PhysicsInit( SOLID_VPHYSICS )
-	self:SetMoveType( MOVETYPE_VPHYSICS )
-	self:SetSolid( SOLID_VPHYSICS )
 	
 	if( self.Mesh && table.Count(self.Mesh) > 0 ) then
+	
+		self:SetModel( "models/dav0r/hoverball.mdl" )
+		self:PhysicsInit( SOLID_VPHYSICS )
+		self:SetMoveType( MOVETYPE_VPHYSICS )
+		self:SetSolid( SOLID_VPHYSICS )
 	
 		local phys = self:GetPhysicsObject()
 		
 		if(phys:IsValid()) then
 		
-			phys:RebuildFromConvexs(self:GetPos(), self:GetAngles(), self.Mass, 0.0001, 0.0001, 1, 1, self.Mesh)
+			phys:RebuildFromConvexs(self:GetPos(), self:GetAngles(), self.Mass, 0.001, 0.001, 1, 1, self.Mesh)
 			
 			phys = nil
 		
@@ -40,6 +40,9 @@ function ENT:Initialize()
 	
 end
 
+/*---------------------------------------------------------
+   Name: BuildWeld
+---------------------------------------------------------*/
 function ENT:BuildWeld(entTable)
 	
 	for _, v in pairs(entTable) do
@@ -50,9 +53,12 @@ function ENT:BuildWeld(entTable)
 	
 end
 
+/*---------------------------------------------------------
+   Name: MergeEntity
+---------------------------------------------------------*/
 function ENT:MergeEntity(ent)
 
-	if(ent:GetClass() != "prop_physics") then
+	if(ent:GetClass() != "prop_physics" || ent:GetParent():IsValid()) then
 	
 		return
 	
@@ -66,6 +72,8 @@ function ENT:MergeEntity(ent)
 	local phys = ent:GetPhysicsObject()
 	
 	if( phys:IsValid() ) then
+	
+		constraint.RemoveAll(ent)
 	
 		local convexCount = phys:GetConvexCount()
 		
@@ -104,8 +112,11 @@ function ENT:MergeEntity(ent)
 	
 end
 
+/*---------------------------------------------------------
+   Name: OnRestore
+---------------------------------------------------------*/
 function ENT:OnRestore()
-
+	
 end
 
 /*---------------------------------------------------------
@@ -134,4 +145,89 @@ end
 ---------------------------------------------------------*/
 function ENT:Use( activator, caller )
 
+end
+
+/*---------------------------------------------------------
+   Name: PreEntityCopy
+---------------------------------------------------------*/
+function ENT:PreEntityCopy()
+
+	local info = {}
+	
+	info.Children = {}
+	
+	for _, v in pairs(self.Children) do
+	
+		local child = {}
+		child.Class = v:GetClass()
+		child.Model = v:GetModel()
+		child.Pos = v:GetPos() - self:GetPos()
+		child.Pos:Rotate(-1 * self:GetAngles())
+		child.Ang = v:GetAngles() - self:GetAngles()
+		child.Mat = v:GetMaterial()
+		child.Skin = v:GetSkin()
+		
+		table.insert(info.Children, child)
+		
+	end
+	
+	info.Mass = self.Mass
+	
+	info.Frozen = !self:GetPhysicsObject():IsMoveable()
+	
+	duplicator.StoreEntityModifier(self.Entity, "PolyDupe", info)
+	
+end
+
+/*---------------------------------------------------------
+   Name: PostEntityPaste
+---------------------------------------------------------*/
+function ENT:PostEntityPaste(ply, ent, createdEnts)
+
+	if(ent.EntityMods and ent.EntityMods.PolyDupe) then
+	
+		local entList = {}
+		
+		for _, v in pairs(ent.EntityMods.PolyDupe.Children) do
+			
+			local prop = ents.Create(v.Class)
+			
+			prop:SetModel(v.Model)
+			
+			local pos = Vector(v.Pos.x, v.Pos.y, v.Pos.z)
+			pos:Rotate(self:GetAngles())
+			pos = pos + self:GetPos()
+			
+			prop:SetPos(pos)
+			prop:SetAngles(v.Ang + self:GetAngles())
+			
+			prop:Spawn()
+			
+			prop:SetMaterial(v.Mat)
+			prop:SetSkin(v.Skin)
+			
+			if(SPropProtection) then
+			
+				SPropProtection.PlayerMakePropOwner(ply, prop)
+				
+			end
+			
+			table.insert(entList, prop)
+			
+		end
+		
+		self.Mass = ent.EntityMods.PolyDupe.Mass
+		
+		self:BuildWeld(entList)
+		
+		self:Spawn()
+		
+		if(ent.EntityMods.PolyDupe.Frozen) then
+		
+			ent:GetPhysicsObject():EnableMotion(false)
+		
+		end
+		
+	end
+	
 end
