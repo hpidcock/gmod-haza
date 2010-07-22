@@ -1,0 +1,76 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Curl">
+      <UniqueIdentifier>{438da170-4c2e-45e3-a5bb-e17ea3e4c75b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Includes">
+      <UniqueIdentifier>{a07fdf64-91ed-4d22-94d6-9a2e40bf2d21}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="curl\curl.h">
+      <Filter>Curl</Filter>
+    </ClInclude>
+    <ClInclude Include="curl\curl_config.h">
+      <Filter>Curl</Filter>
+    </ClInclude>
+    <ClInclude Include="curl\curlbuild.h">
+      <Filter>Curl</Filter>
+    </ClInclude>
+    <ClInclude Include="curl\curlrules.h">
+      <Filter>Curl</Filter>
+    </ClInclude>
+    <ClInclude Include="curl\curlver.h">
+      <Filter>Curl</Filter>
+    </ClInclude>
+    <ClInclude Include="curl\easy.h">
+      <Filter>Curl</Filter>
+    </ClInclude>
+    <ClInclude Include="curl\mprintf.h">
+      <Filter>Curl</Filter>
+    </ClInclude>
+    <ClInclude Include="curl\multi.h">
+      <Filter>Curl</Filter>
+    </ClInclude>
+    <ClInclude Include="curl\stdcheaders.h">
+      <Filter>Curl</Filter>
+    </ClInclude>
+    <ClInclude Include="curl\typecheck-gcc.h">
+      <Filter>Curl</Filter>
+    </ClInclude>
+    <ClInclude Include="curl\types.h">
+      <Filter>Curl</Filter>
+    </ClInclude>
+    <ClInclude Include="ILuaObject.h">
+      <Filter>Includes</Filter>
+    </ClInclude>
+    <ClInclude Include="GMLuaModule.h">
+      <Filter>Includes</Filter>
+    </ClInclude>
+    <ClInclude Include="ILuaInterface.h">
+      <Filter>Includes</Filter>
+    </ClInclude>
+    <ClInclude Include="ILuaModuleManager.h">
+      <Filter>Includes</Filter>
+    </ClInclude>
+    <ClInclude Include="CAutoUnRef.h">
+      <Filter>Includes</Filter>
+    </ClInclude>
+    <ClInclude Include="CThreadedCurl.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="gm_curly.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CThreadedCurl.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
