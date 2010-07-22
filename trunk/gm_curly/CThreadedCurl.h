@@ -221,13 +221,17 @@ public:
 		return result;
 	};
 
-	int SetPostFields(std::string postFields)
+	int SetPostFields(const char *postFields, int size)
 	{
 		if(m_bActive)
 			return CURLE_THREAD_ACTIVE;
 
 		m_Curl_LOCK.Lock();
-			CURLcode result = curl_easy_setopt(m_pCurl, CURLOPT_POSTFIELDS, postFields.c_str());
+			CURLcode result = curl_easy_setopt(m_pCurl, CURLOPT_POSTFIELDSIZE, size);
+			if(result == CURLE_OK)
+			{
+				result = curl_easy_setopt(m_pCurl, CURLOPT_COPYPOSTFIELDS, postFields);
+			}
 		m_Curl_LOCK.Unlock();
 
 		return result;

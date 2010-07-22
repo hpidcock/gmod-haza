@@ -149,7 +149,7 @@ namespace Curly
 		if(curly == NULL)
 			return 0;
 
-		Lua()->Push((float)curly->SetPostFields(Lua()->GetString(2)));
+		Lua()->Push((float)curly->SetPostFields(Lua()->GetString(2), Lua()->StringLength(2)));
 
 		return 1;
 	}
