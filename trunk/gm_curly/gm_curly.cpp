@@ -2,6 +2,7 @@
 
 #include "curl/curl.h"
 #include "CThreadedCurl.h"
+#include "CBinRead.h"
 
 GMOD_MODULE(Init, Shutdown);
 
@@ -45,6 +46,21 @@ namespace Curly
 			return 0;
 
 		curly->SetCallback(Lua()->GetReference(2));
+
+		return 0;
+	}
+
+	LUA_FUNCTION(SetBinaryMode)
+	{
+		Lua()->CheckType(1, TYPE_CURLY);
+		Lua()->CheckType(2, GLua::TYPE_BOOL);
+
+		CThreadedCurl *curly = reinterpret_cast<CThreadedCurl *>(Lua()->GetUserData(1));
+
+		if(curly == NULL)
+			return 0;
+
+		curly->SetBinaryMode(Lua()->GetBool(2));
 
 		return 0;
 	}
@@ -174,6 +190,135 @@ namespace Curly
 	}
 }
 
+namespace BinRead
+{
+	LUA_FUNCTION(__delete)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		delete read;
+
+		return 0;
+	}
+
+	LUA_FUNCTION(ReadDouble)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		Lua()->PushDouble((double)read->ReadDouble());
+
+		return 1;
+	};
+
+	LUA_FUNCTION(ReadInt)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		Lua()->Push((float)read->ReadInt());
+
+		return 1;
+	};
+
+	LUA_FUNCTION(ReadFloat)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		Lua()->Push((float)read->ReadFloat());
+
+		return 1;
+	};
+
+	LUA_FUNCTION(ReadByte)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		Lua()->Push((float)read->ReadByte());
+
+		return 1;
+	};
+
+	LUA_FUNCTION(PeekByte)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		Lua()->Push((float)read->PeekByte());
+
+		return 1;
+	};
+
+	LUA_FUNCTION(GetSize)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		Lua()->Push((float)read->GetSize());
+
+		return 1;
+	};
+
+	LUA_FUNCTION(GetReadPosition)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		Lua()->Push((float)read->GetReadPosition());
+
+		return 1;
+	};
+
+	LUA_FUNCTION(Rewind)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		read->Rewind();
+
+		return 0;
+	};
+}
+
 int SetConstants(lua_State *L);
 
 int Init(lua_State *L)
@@ -194,6 +339,7 @@ int Init(lua_State *L)
 
 		__index->SetMember("Perform", Curly::Perform);
 		__index->SetMember("SetCallback", Curly::SetCallback);
+		__index->SetMember("SetBinaryMode", Curly::SetBinaryMode);
 		__index->SetMember("SetCookies", Curly::SetCookies);
 		__index->SetMember("SetOptNumber", Curly::SetOptNumber);
 		__index->SetMember("SetPassword", Curly::SetPassword);
@@ -204,6 +350,24 @@ int Init(lua_State *L)
 		meta->SetMember("__index", __index);
 	}
 	meta->SetMember("__gc", Curly::__delete);
+
+
+	CAutoUnRef metaBinRead = Lua()->GetMetaTable(MT_BINREAD, TYPE_BINREAD);
+	{
+		CAutoUnRef __index = Lua()->GetNewTable();
+
+		__index->SetMember("GetReadPosition", BinRead::GetReadPosition);
+		__index->SetMember("GetSize", BinRead::GetSize);
+		__index->SetMember("PeekByte", BinRead::PeekByte);
+		__index->SetMember("ReadByte", BinRead::ReadByte);
+		__index->SetMember("ReadDouble", BinRead::ReadDouble);
+		__index->SetMember("ReadInt", BinRead::ReadInt);
+		__index->SetMember("Rewind", BinRead::Rewind);
+		__index->SetMember("ReadFloat", BinRead::ReadFloat);
+
+		metaBinRead->SetMember("__index", __index);
+	}
+	metaBinRead->SetMember("__gc", BinRead::__delete);
 
 
 	CAutoUnRef hookSystem = Lua()->GetGlobal("hook");

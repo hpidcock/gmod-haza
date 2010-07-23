@@ -32,6 +32,8 @@
 
 #include "curl/curl.h"
 
+#include "CBinRead.h"
+
 #ifdef WIN32
 	#include <Windows.h>
 #else
@@ -98,7 +100,8 @@ private:
 struct CurlyCallResult
 {
 	CURLcode code;
-	std::string data;
+	char *data;
+	int size;
 };
 
 namespace CurlyOption
@@ -146,6 +149,11 @@ public:
 			Lua()->FreeReference(m_Callback);
 
 		m_Callback = i;
+	};
+
+	void SetBinaryMode(bool mode)
+	{
+		m_bBinaryMode = mode;
 	};
 
 	int Perform(void)
@@ -250,10 +258,28 @@ public:
 				Lua()->PushReference(m_Callback);
 				Lua()->PushUserData(meta, static_cast<void *>(this));
 				Lua()->PushDouble(result->code);
-				Lua()->Push(result->data.c_str());
+				if(result->size > 0)
+				{
+					if(m_bBinaryMode)
+					{
+						CAutoUnRef metaBR = Lua()->GetMetaTable(MT_BINREAD, TYPE_BINREAD);
+						CBinRead *br = new CBinRead(L);
+						br->SetData((const unsigned char *)result->data, result->size);
+						Lua()->PushUserData(metaBR, static_cast<void *>(br));
+					}
+					else
+					{
+						Lua()->Push(result->data);
+					}
+				}
+				else
+				{
+					Lua()->PushNil();
+				}
 				Lua()->Call(3, 0);
 			}
 
+			free(result->data);
 			delete result;
 		}
 
@@ -307,6 +333,8 @@ private:
 
 	std::queue<CurlyCallResult *> m_outResults;
 	CMutexLock m_outResults_LOCK;
+
+	bool m_bBinaryMode;
 };
 
 #endif // __CTHREADEDCURL_H__

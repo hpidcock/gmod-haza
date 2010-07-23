@@ -64,6 +64,9 @@
     <ClInclude Include="CThreadedCurl.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="CBinRead.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="gm_curly.cpp">

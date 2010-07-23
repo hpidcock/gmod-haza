@@ -33,7 +33,8 @@ CThreadedCurl::CThreadedCurl(lua_State *Ls) :
 	m_bRunning(true),
 	m_Callback(-1),
 	m_bActive(false),
-	m_iRefCount(0)
+	m_iRefCount(0),
+	m_bBinaryMode(false)
 {
 	m_pCurl = curl_easy_init();
 
@@ -96,14 +97,12 @@ static size_t IncomingData(void *buffer, size_t size, size_t nmemb, void *callRe
 {
 	CurlyCallResult *result = (CurlyCallResult *)callResult;
 
-	char *charBuffer = (char *)malloc(size * nmemb + 1);
+	int oldSize = result->size;
+	result->size = oldSize + size * nmemb;
 
-	memcpy(charBuffer, buffer, size * nmemb);
-	charBuffer[size * nmemb] = 0x00;
+	result->data = (char *)realloc(result->data, result->size);
 
-	result->data += charBuffer;
-
-	free(charBuffer);
+	memcpy(&result->data[oldSize], buffer, size * nmemb);
 	
 	return size * nmemb;
 }
@@ -121,7 +120,8 @@ void *CThreadedCurl::ThreadProc(void *lpParameter)
 		if(curly->m_bActive)
 		{
 			CurlyCallResult *result = new CurlyCallResult();
-			result->data = "";
+			result->data = NULL;
+			result->size = NULL;
 
 			// Perform the transaction.
 			curly->m_Curl_LOCK.Lock();
@@ -129,6 +129,9 @@ void *CThreadedCurl::ThreadProc(void *lpParameter)
 				curl_easy_setopt(curly->m_pCurl, CURLOPT_WRITEDATA, result);
 				result->code = curl_easy_perform(curly->m_pCurl);
 			curly->m_Curl_LOCK.Unlock();
+
+			result->data = (char *)realloc(result->data, result->size + 1);
+			result->data[result->size] = 0x00; // C-String functions.
 
 			// Push the result.
 			curly->m_outResults_LOCK.Lock();
