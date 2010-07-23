@@ -121,6 +121,16 @@ public:
 
 		return *(unsigned char *)&m_pData[m_iReadPosition];
 	};
+	
+	const char *ReadStr(void)
+	{
+		if(m_pData == NULL || m_iReadPosition >= m_iDataSize)
+			return NULL;
+			
+		const char *ret = (const char *)&m_pData[m_iReadPosition];
+		m_iReadPosition += strlen(ret) + 1;
+		return ret;
+	};
 
 	void Rewind(void)
 	{
