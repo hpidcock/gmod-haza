@@ -80,6 +80,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="CAutoUnRef.h" />
+    <ClInclude Include="CBinRead.h" />
     <ClInclude Include="CThreadedCurl.h" />
     <ClInclude Include="curl\curl.h" />
     <ClInclude Include="curl\curlbuild.h" />
