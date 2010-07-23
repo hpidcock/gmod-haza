@@ -2,6 +2,7 @@
 
 #include "GMLuaModule.h"
 #include "ThreadedSocket.h"
+#include "CBinRead.h"
 
 #ifdef WIN32
 #undef GetObject
@@ -9,7 +10,12 @@
 
 GMOD_MODULE(Init, Shutdown);
 
-std::vector<CThreadedSocket *> *sockets[2];
+std::map<lua_State *, std::vector<CThreadedSocket *>> g_Socks;
+
+size_t GetStringSize(lua_State *L, int stackPos)
+{
+	return Lua()->StringLength(stackPos);
+}
 
 namespace OOSock
 {
@@ -74,7 +80,7 @@ namespace OOSock
 		if(sock == NULL)
 			return 0;
 
-		Lua()->Push((float)sock->Bind(Lua()->GetInteger(3), Lua()->GetString(2)));
+		Lua()->Push((float)sock->Bind(Lua()->GetInteger(3), CString(Lua()->GetString(2), GetStringSize(L, 2))));
 
 		return 1;
 	}
@@ -119,7 +125,7 @@ namespace OOSock
 		if(sock == NULL)
 			return 0;
 
-		Lua()->Push((float)sock->Connect(Lua()->GetString(2), Lua()->GetInteger(3)));
+		Lua()->Push((float)sock->Connect(CString(Lua()->GetString(2), GetStringSize(L, 2)), Lua()->GetInteger(3)));
 
 		return 1;
 	}
@@ -136,11 +142,11 @@ namespace OOSock
 
 		if(Lua()->GetType(3) == GLua::TYPE_STRING && Lua()->GetType(4) == GLua::TYPE_NUMBER)
 		{
-			Lua()->Push((float)sock->Send(Lua()->GetString(2), Lua()->GetString(3), Lua()->GetInteger(4)));
+			Lua()->Push((float)sock->Send(CString(Lua()->GetString(2), GetStringSize(L, 2)), CString(Lua()->GetString(3), GetStringSize(L, 3)), Lua()->GetInteger(4)));
 		}
 		else
 		{
-			Lua()->Push((float)sock->Send(Lua()->GetString(2)));
+			Lua()->Push((float)sock->Send(CString(Lua()->GetString(2), GetStringSize(L, 2))));
 		}
 
 		return 1;
@@ -156,13 +162,15 @@ namespace OOSock
 		if(sock == NULL)
 			return 0;
 
+		std::string data = std::string(Lua()->GetString(2)) + "\n";
+
 		if(Lua()->GetType(3) == GLua::TYPE_STRING && Lua()->GetType(4) == GLua::TYPE_NUMBER)
 		{
-			Lua()->Push((float)sock->Send(std::string(Lua()->GetString(2)) + "\n", Lua()->GetString(3), Lua()->GetInteger(4)));
+			Lua()->Push((float)sock->Send(CString(data.c_str(), data.size()), CString(Lua()->GetString(3), GetStringSize(L, 3)), Lua()->GetInteger(4)));
 		}
 		else
 		{
-			Lua()->Push((float)sock->Send(std::string(Lua()->GetString(2)) + "\n"));
+			Lua()->Push((float)sock->Send(CString(data.c_str(), data.size())));
 		}
 
 		return 1;
@@ -225,17 +233,24 @@ namespace OOSock
 		return 1;
 	}
 
+	LUA_FUNCTION(SetBinaryMode)
+	{
+		Lua()->CheckType(1, TYPE_SOCKET);
+		Lua()->CheckType(2, GLua::TYPE_BOOL);
+
+		CThreadedSocket *sock = reinterpret_cast<CThreadedSocket *>(Lua()->GetUserData(1));
+
+		if(sock == NULL)
+			return 0;
+
+		sock->SetBinaryMode(Lua()->GetBool(2));
+
+		return 0;
+	}
+
 	LUA_FUNCTION(STATIC_CallbackHook)
 	{
-		std::vector<CThreadedSocket *> *socketsList = NULL;
-		if(Lua()->IsClient())
-		{
-			socketsList = sockets[0];
-		}
-		else
-		{
-			socketsList = sockets[1];
-		}
+		std::vector<CThreadedSocket *> *socketsList = &g_Socks[L];
 
 		std::vector<CThreadedSocket *> copy = *socketsList;
 		std::vector<CThreadedSocket *>::iterator itor = copy.begin();
@@ -249,16 +264,138 @@ namespace OOSock
 	}
 };
 
+namespace BinRead
+{
+	LUA_FUNCTION(__delete)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		delete read;
+
+		return 0;
+	}
+
+	LUA_FUNCTION(ReadDouble)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		Lua()->PushDouble((double)read->ReadDouble());
+
+		return 1;
+	};
+
+	LUA_FUNCTION(ReadInt)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		Lua()->Push((float)read->ReadInt());
+
+		return 1;
+	};
+
+	LUA_FUNCTION(ReadFloat)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		Lua()->Push((float)read->ReadFloat());
+
+		return 1;
+	};
+
+	LUA_FUNCTION(ReadByte)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		Lua()->Push((float)read->ReadByte());
+
+		return 1;
+	};
+
+	LUA_FUNCTION(PeekByte)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		Lua()->Push((float)read->PeekByte());
+
+		return 1;
+	};
+
+	LUA_FUNCTION(GetSize)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		Lua()->Push((float)read->GetSize());
+
+		return 1;
+	};
+
+	LUA_FUNCTION(GetReadPosition)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		Lua()->Push((float)read->GetReadPosition());
+
+		return 1;
+	};
+
+	LUA_FUNCTION(Rewind)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		read->Rewind();
+
+		return 0;
+	};
+}
+
 int Init(lua_State* L)
 {
-	if(Lua()->IsClient())
-	{
-		sockets[0] = new std::vector<CThreadedSocket *>();
-	}
-	else
-	{
-		sockets[1] = new std::vector<CThreadedSocket *>();
-	}
+	g_Socks[L] = std::vector<CThreadedSocket *>();
 
 #ifdef WIN32
 	WSADATA wsa_data;
@@ -279,11 +416,29 @@ int Init(lua_State* L)
 		__index->SetMember("ReceiveLine", OOSock::ReceiveLine);
 		__index->SetMember("ReceiveDatagram", OOSock::ReceiveDatagram);
 		__index->SetMember("SetCallback", OOSock::SetCallback);
+		__index->SetMember("SetBinaryMode", OOSock::SetBinaryMode);
 		__index->SetMember("Close", OOSock::Close);
 
 		meta->SetMember("__index", __index);
 	}
 	meta->SetMember("__gc", OOSock::__delete);
+
+	CAutoUnRef metaBinRead = Lua()->GetMetaTable(MT_BINREAD, TYPE_BINREAD);
+	{
+		CAutoUnRef __index = Lua()->GetNewTable();
+
+		__index->SetMember("GetReadPosition", BinRead::GetReadPosition);
+		__index->SetMember("GetSize", BinRead::GetSize);
+		__index->SetMember("PeekByte", BinRead::PeekByte);
+		__index->SetMember("ReadByte", BinRead::ReadByte);
+		__index->SetMember("ReadDouble", BinRead::ReadDouble);
+		__index->SetMember("ReadInt", BinRead::ReadInt);
+		__index->SetMember("Rewind", BinRead::Rewind);
+		__index->SetMember("ReadFloat", BinRead::ReadFloat);
+
+		metaBinRead->SetMember("__index", __index);
+	}
+	metaBinRead->SetMember("__gc", BinRead::__delete);
 
 	Lua()->SetGlobal("OOSock", OOSock::__new);
 	Lua()->SetGlobal("IPPROTO_TCP", (float)IPPROTO_TCP);
@@ -319,15 +474,7 @@ int Init(lua_State* L)
 
 int Shutdown(lua_State* L)
 {
-	std::vector<CThreadedSocket *> *socketsList = NULL;
-	if(Lua()->IsClient())
-	{
-		socketsList = sockets[0];
-	}
-	else
-	{
-		socketsList = sockets[1];
-	}
+	std::vector<CThreadedSocket *> *socketsList = &g_Socks[L];
 
 	std::vector<CThreadedSocket *> copy = *socketsList;
 	std::vector<CThreadedSocket *>::iterator itor = copy.begin();
@@ -341,17 +488,6 @@ int Shutdown(lua_State* L)
 #ifdef WIN32
 	WSACleanup();
 #endif
-
-	if(Lua()->IsClient())
-	{
-		delete sockets[0];
-		sockets[0] = NULL;
-	}
-	else
-	{
-		delete sockets[1];
-		sockets[1] = NULL;
-	}
 
 	return 0;
 }

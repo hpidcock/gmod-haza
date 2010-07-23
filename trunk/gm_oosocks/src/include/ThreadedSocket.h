@@ -30,6 +30,8 @@
 
 #include "GMLuaModule.h"
 
+#include "CBinRead.h"
+
 #ifdef WIN32
 	#include <Windows.h>
 #else
@@ -45,8 +47,10 @@
 	#include <string.h>
 #endif
 
+#include "CString.h"
 #include <string>
 #include <queue>
+#include <map>
 
 #ifdef WIN32
 	#pragma once
@@ -60,7 +64,7 @@
 #define __THREADEDSOCKET_H__
 
 class CThreadedSocket;
-extern std::vector<CThreadedSocket *> *sockets[2];
+extern std::map<lua_State *, std::vector<CThreadedSocket *>> g_Socks;
 
 class CMutexLock
 {
@@ -152,8 +156,8 @@ namespace SOCK_CALL
 		CALL call;
 		int error;
 		int secondary;
-		std::string data;
-		std::string peer;
+		CString data;
+		CString peer;
 	};
 
 	struct SockCall
@@ -161,8 +165,8 @@ namespace SOCK_CALL
 		unsigned int callId;
 		CALL call;
 		int integer;
-		std::string string;
-		std::string peer;
+		CString string;
+		CString peer;
 	};
 };
 
@@ -196,6 +200,8 @@ public:
 	{
 		this->L = L;
 
+		m_bBinaryMode = false;
+
 		m_iRefCount = 0;
 
 		m_Callback = -1;
@@ -218,19 +224,14 @@ public:
 		pthread_create(&m_Thread, NULL, &ThreadProc, this);
 #endif
 
-		if(Lua()->IsClient())
-		{
-			sockets[0]->push_back(this);
-		}
-		else
-		{
-			sockets[1]->push_back(this);
-		}
+		g_Socks[L].push_back(this);
 	};
 
 	CThreadedSocket(lua_State *L, int sock, bool x)
 	{	
 		this->L = L;
+
+		m_bBinaryMode = false;
 
 		m_iRefCount = 0;
 
@@ -249,27 +250,13 @@ public:
 		pthread_create(&m_Thread, NULL, &ThreadProc, this);
 #endif
 
-		if(Lua()->IsClient())
-		{
-			sockets[0]->push_back(this);
-		}
-		else
-		{
-			sockets[1]->push_back(this);
-		}
+		g_Socks[L].push_back(this);
 	};
 
 	~CThreadedSocket(void)
 	{
-		std::vector<CThreadedSocket *> *socketsList = NULL;
-		if(Lua()->IsClient())
-		{
-			socketsList = sockets[0];
-		}
-		else
-		{
-			socketsList = sockets[1];
-		}
+		std::vector<CThreadedSocket *> *socketsList = &g_Socks[L];
+
 		std::vector<CThreadedSocket *>::iterator itor = socketsList->begin();
 		while(itor != socketsList->end())
 		{
@@ -318,7 +305,7 @@ public:
 		}
 	};
 
-	int Send(std::string data)
+	int Send(CString data)
 	{
 		m_iCallCounter++;
 
@@ -327,7 +314,7 @@ public:
 		call->call = SOCK_CALL::SEND;
 		call->string = data;
 
-		call->peer = "";
+		call->peer = CString("", 0);
 		call->integer = 0;
 
 		PushCall(call);
@@ -335,7 +322,7 @@ public:
 		return m_iCallCounter;
 	};
 
-	int Send(std::string data, std::string peer, int peerPort)
+	int Send(CString data, CString peer, int peerPort)
 	{
 		m_iCallCounter++;
 
@@ -360,8 +347,8 @@ public:
 		call->call = SOCK_CALL::REC_SIZE;
 		call->integer = len;
 
-		call->string = "";
-		call->peer = "";
+		call->string = CString("", 0);
+		call->peer = CString("", 0);
 
 		PushCallRecv(call);
 
@@ -377,8 +364,8 @@ public:
 		call->call = SOCK_CALL::REC_LINE;
 
 		call->integer = 0;
-		call->string = "";
-		call->peer = "";
+		call->string = CString("", 0);
+		call->peer = CString("", 0);
 
 		PushCallRecv(call);
 
@@ -394,15 +381,15 @@ public:
 		call->call = SOCK_CALL::REC_DATAGRAM;
 
 		call->integer = 0;
-		call->string = "";
-		call->peer = "";
+		call->string = CString("", 0);
+		call->peer = CString("", 0);
 
 		PushCallRecv(call);
 
 		return m_iCallCounter;
 	};
 
-	int Bind(int port, std::string ip = "")
+	int Bind(int port, CString ip)
 	{
 		m_iCallCounter++;
 
@@ -412,14 +399,14 @@ public:
 		call->integer = port;
 		call->string = ip;
 		
-		call->peer = "";
+		call->peer = CString("", 0);
 
 		PushCall(call);
 
 		return m_iCallCounter;
 	};
 
-	int Connect(std::string ip, int port)
+	int Connect(CString ip, int port)
 	{
 		m_iCallCounter++;
 
@@ -429,7 +416,7 @@ public:
 		call->integer = port;
 		call->string = ip;
 		
-		call->peer = "";
+		call->peer = CString("", 0);
 
 		PushCall(call);
 
@@ -445,8 +432,8 @@ public:
 		call->call = SOCK_CALL::ACCEPT;
 
 		call->integer = 0;
-		call->string = "";
-		call->peer = "";
+		call->string = CString("", 0);
+		call->peer = CString("", 0);
 
 		PushCall(call);
 
@@ -462,12 +449,17 @@ public:
 		call->call = SOCK_CALL::LISTEN;
 		call->integer = backlog;
 
-		call->string = "";
-		call->peer = "";
+		call->string = CString("", 0);
+		call->peer = CString("", 0);
 
 		PushCall(call);
 
 		return m_iCallCounter;
+	};
+
+	void SetBinaryMode(bool mode)
+	{
+		m_bBinaryMode = mode;
 	};
 
 	void InvokeCallbacks(void)
@@ -496,14 +488,24 @@ public:
 					else
 						Lua()->Push(false);
 
-					Lua()->Push(result->data.c_str());
-					Lua()->Push(result->peer.c_str());
+					Lua()->Push(result->data.Str());
+					Lua()->Push(result->peer.Str());
 					Lua()->PushNil();
 				}
 				else
 				{
-					Lua()->Push(result->data.c_str());
-					Lua()->Push(result->peer.c_str());
+					if(m_bBinaryMode)
+					{
+						CAutoUnRef metaBR = Lua()->GetMetaTable(MT_BINREAD, TYPE_BINREAD);
+						CBinRead *br = new CBinRead(L);
+						br->SetData((const unsigned char *)result->data.Str(), result->data.Size());
+						Lua()->PushUserData(metaBR, static_cast<void *>(br));
+					}
+					else
+					{
+						Lua()->Push(result->data.Str());
+					}
+					Lua()->Push(result->peer.Str());
 					Lua()->Push((float)result->secondary);
 				}
 				Lua()->Call(7, 0);
@@ -638,9 +640,12 @@ protected:
 			return NULL;
 
 		bool alternatingBuffer = false;
+		bool completedACall = false;
 
 		while(socket->m_bRunning)
 		{
+			completedACall = false;
+
 			socket->m_inCalls_LOCK.Lock();
 			SOCK_CALL::SockCall *call = NULL;
 
@@ -664,7 +669,7 @@ protected:
 				case SOCK_CALL::CONNECT:
 					{
 						socket->m_Addr.sin_port = htons(call->integer);
-						socket->m_Addr.sin_addr = *socket->GetHostByName(call->string.c_str());
+						socket->m_Addr.sin_addr = *socket->GetHostByName(call->string.Str());
 
 						memset(socket->m_Addr.sin_zero, NULL, sizeof(socket->m_Addr.sin_zero));
 		    
@@ -685,6 +690,7 @@ protected:
 							socket->m_inCallsRecv.pop();
 						delete call;
 						socket->m_inCalls_LOCK.Unlock();
+						completedACall = true;
 					}
 					break;
 				case SOCK_CALL::REC_SIZE:
@@ -713,17 +719,19 @@ protected:
 
 						result->error = recvfrom(socket->m_iSocket, buffer, call->integer, 0, &addr, &addrSz);
 
+						size_t length = result->error;
 
-						if(result->error >= 0)
-							buffer[result->error] = '\0';
-						else
-							buffer[0] = '\0';
+						if(result->error < 0)
+						{
+							length = 0;
+						}
 
-						result->data = buffer;
+						result->data = CString(buffer, length);
 
 						free(buffer);
 
-						result->peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
+						char *peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
+						result->peer = CString(peer, strlen(peer));
 						result->secondary = ntohs(((sockaddr_in *)&addr)->sin_port);
 
 						result->error = socket->CheckError(result->error, 0);
@@ -737,6 +745,7 @@ protected:
 							socket->m_inCallsRecv.pop();
 						delete call;
 						socket->m_inCalls_LOCK.Unlock();
+						completedACall = true;
 					}
 					break;
 				case SOCK_CALL::REC_LINE:
@@ -759,8 +768,7 @@ protected:
 						result->callId = call->callId;
 
 						char buffer = 0;
-
-						result->data = "";
+						std::string fullBuffer = "";
 
 						sockaddr addr;
 						socklen_t addrSz = sizeof(sockaddr);
@@ -770,12 +778,15 @@ protected:
 							if(buffer == '\n')
 								break;
 
-							result->data.append(1, buffer);
+							fullBuffer.append(1, buffer);
 
 							addrSz = sizeof(sockaddr);
 						}
 
-						result->peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
+						result->data = CString(fullBuffer.c_str(), fullBuffer.size());
+
+						char *peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
+						result->peer = CString(peer, strlen(peer));
 						result->secondary = ntohs(((sockaddr_in *)&addr)->sin_port);
 
 						result->error = socket->CheckError(result->error, 0);
@@ -789,6 +800,7 @@ protected:
 							socket->m_inCallsRecv.pop();
 						delete call;
 						socket->m_inCalls_LOCK.Unlock();
+						completedACall = true;
 					}
 					break;
 				case SOCK_CALL::REC_DATAGRAM:
@@ -824,16 +836,19 @@ protected:
 							break;
 						}
 
-						if(result->error >= 0)
-							buffer[result->error] = '\0';
-						else
-							buffer[0] = '\0';
+						size_t length = result->error;
 
-						result->data = buffer;
+						if(result->error < 0)
+						{
+							length = 0;
+						}
+
+						result->data = CString(buffer, length);
 
 						free(buffer);
 
-						result->peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
+						char *peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
+						result->peer = CString(peer, strlen(peer));
 						result->secondary = ntohs(((sockaddr_in *)&addr)->sin_port);
 
 						result->error = socket->CheckError(result->error, 0);
@@ -847,6 +862,7 @@ protected:
 							socket->m_inCallsRecv.pop();
 						delete call;
 						socket->m_inCalls_LOCK.Unlock();
+						completedACall = true;
 					}
 					break;
 				case SOCK_CALL::SEND:
@@ -855,18 +871,18 @@ protected:
 						result->call = call->call;
 						result->callId = call->callId;
 
-						std::string msg = call->string;
+						CString msg = call->string;
 						int total = 0;
-						int len = msg.size();
+						int len = msg.Size();
 						int bytesleft = len;
 						int n = -1;
 
 						struct sockaddr *addr = NULL;
 
-						if(call->peer != "")
+						if(call->peer.Size() != 0)
 						{
 							socket->m_Addr.sin_port = htons(call->integer);
-							socket->m_Addr.sin_addr = *socket->GetHostByName(call->peer.c_str());
+							socket->m_Addr.sin_addr = *socket->GetHostByName(call->peer.Str());
 
 							memset(socket->m_Addr.sin_zero, NULL, sizeof(socket->m_Addr.sin_zero));
 
@@ -876,9 +892,9 @@ protected:
 						while(total < len)
 						{
 							if(addr == NULL)
-    							n = send(socket->m_iSocket, msg.c_str() + total, bytesleft, 0);
+    							n = send(socket->m_iSocket, msg.Str() + total, bytesleft, 0);
 							else
-								n = sendto(socket->m_iSocket, msg.c_str() + total, bytesleft, 0, addr, sizeof(sockaddr_in));
+								n = sendto(socket->m_iSocket, msg.Str() + total, bytesleft, 0, addr, sizeof(sockaddr_in));
 							if(n <= 0)
 								break;
 							total += n;
@@ -898,14 +914,15 @@ protected:
 							socket->m_inCallsRecv.pop();
 						delete call;
 						socket->m_inCalls_LOCK.Unlock();
+						completedACall = true;
 					}
 					break;
 				case SOCK_CALL::BIND:
 					{
 						socket->m_Addr.sin_port = htons(call->integer);
 
-						if(call->string != "")
-							socket->m_Addr.sin_addr = *socket->GetHostByName(call->string.c_str());
+						if(call->string.Size() != 0)
+							socket->m_Addr.sin_addr = *socket->GetHostByName(call->string.Str());
 						else
 							socket->m_Addr.sin_addr.s_addr = INADDR_ANY;
 
@@ -928,6 +945,7 @@ protected:
 							socket->m_inCallsRecv.pop();
 						delete call;
 						socket->m_inCalls_LOCK.Unlock();
+						completedACall = true;
 					}
 					break;
 				case SOCK_CALL::LISTEN:
@@ -949,6 +967,7 @@ protected:
 							socket->m_inCallsRecv.pop();
 						delete call;
 						socket->m_inCalls_LOCK.Unlock();
+						completedACall = true;
 					}
 					break;
 				case SOCK_CALL::ACCEPT:
@@ -986,6 +1005,7 @@ protected:
 							socket->m_inCallsRecv.pop();
 						delete call;
 						socket->m_inCalls_LOCK.Unlock();
+						completedACall = true;
 					}
 					break;
 				default:
@@ -1004,11 +1024,14 @@ protected:
 
 			alternatingBuffer = !alternatingBuffer;
 			
+			if(!completedACall)
+			{
 #ifdef WIN32
-			Sleep(1);
+				Sleep(1);
 #else
-			usleep(1000);
+				usleep(1000);
 #endif
+			}
 		}
 
 #ifdef WIN32
@@ -1042,6 +1065,8 @@ private:
 #else
 	pthread_t m_Thread;
 #endif
+
+	bool m_bBinaryMode;
 };
 
 #endif // __THREADEDSOCKET_H__
