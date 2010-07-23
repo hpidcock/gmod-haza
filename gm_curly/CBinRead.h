@@ -111,6 +111,16 @@ public:
 		m_iReadPosition += sizeof(unsigned char);
 		return ret;
 	};
+	
+	const char *ReadStr(void)
+	{
+		if(m_pData == NULL || m_iReadPosition >= m_iDataSize)
+			return NULL;
+			
+		const char *ret = (const char *)&m_pData[m_iReadPosition];
+		m_iReadPosition += strlen(ret) + 1;
+		return ret;
+	};
 
 	unsigned char PeekByte(void)
 	{
