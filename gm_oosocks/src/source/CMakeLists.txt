@@ -9,7 +9,7 @@ set(CMAKE_SHARED_LIBRARY_SUFFIX ".dll")
 elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
 set(CMAKE_SHARED_LIBRARY_SUFFIX "_darwin.dll")
 elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
-set(CMAKE_SHARED_LIBRARY_SUFFIX "_i486.dll")
+set(CMAKE_SHARED_LIBRARY_SUFFIX "_linux.dll")
 endif(CMAKE_SYSTEM_NAME MATCHES "Windows")
 
 add_library(gm_oosocks SHARED gm_oosocks.cpp)
