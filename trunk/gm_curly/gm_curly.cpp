@@ -262,6 +262,20 @@ namespace BinRead
 		return 1;
 	};
 
+	LUA_FUNCTION(ReadString)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		Lua()->Push(read->ReadStr());
+
+		return 1;
+	};
+
 	LUA_FUNCTION(PeekByte)
 	{
 		Lua()->CheckType(1, TYPE_BINREAD);
@@ -364,6 +378,7 @@ int Init(lua_State *L)
 		__index->SetMember("ReadInt", BinRead::ReadInt);
 		__index->SetMember("Rewind", BinRead::Rewind);
 		__index->SetMember("ReadFloat", BinRead::ReadFloat);
+		__index->SetMember("ReadString", BinRead::ReadString);
 
 		metaBinRead->SetMember("__index", __index);
 	}
