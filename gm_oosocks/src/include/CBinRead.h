@@ -25,7 +25,7 @@
 //  OTHER DEALINGS IN THE SOFTWARE.                                     //	
 ////////////////////////////////////////////////////////////////////////*/	
 
-#define MT_BINREAD "BinRead"
+#define MT_BINREAD "BinRead_OOS"
 #define TYPE_BINREAD 9756
 
 #include "GMLuaModule.h"
