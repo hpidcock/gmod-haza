@@ -54,6 +54,16 @@ namespace OOSock
 		return 0;
 	}
 
+	LUA_FUNCTION(__eq)
+	{
+		Lua()->CheckType(1, TYPE_SOCKET);
+		Lua()->CheckType(2, TYPE_SOCKET);
+
+		Lua()->Push(Lua()->GetUserData(1) == Lua()->GetUserData(2));
+
+		return 1;
+	}
+
 	LUA_FUNCTION(SetCallback)
 	{
 		Lua()->CheckType(1, TYPE_SOCKET);
@@ -436,6 +446,7 @@ int Init(lua_State* L)
 		meta->SetMember("__index", __index);
 	}
 	meta->SetMember("__gc", OOSock::__delete);
+	meta->SetMember("__eq", OOSock::__eq);
 
 	CAutoUnRef metaBinRead = Lua()->GetMetaTable(MT_BINREAD, TYPE_BINREAD);
 	{
