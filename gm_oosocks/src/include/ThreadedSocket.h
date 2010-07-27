@@ -486,9 +486,9 @@ public:
 						Lua()->PushUserData(meta, static_cast<void *>(newSock));
 					}
 					else
-						Lua()->Push(false);
-
-					Lua()->Push(result->data.Str());
+					{
+						Lua()->PushNil();
+					}
 					Lua()->Push(result->peer.Str());
 					Lua()->PushNil();
 				}
