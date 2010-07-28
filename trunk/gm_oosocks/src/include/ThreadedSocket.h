@@ -64,7 +64,7 @@
 #define __THREADEDSOCKET_H__
 
 class CThreadedSocket;
-extern std::map<lua_State *, std::vector<CThreadedSocket *>> g_Socks;
+extern std::map< lua_State *, std::vector<CThreadedSocket *> > g_Socks;
 
 class CMutexLock
 {
