@@ -10,7 +10,7 @@
 
 GMOD_MODULE(Init, Shutdown);
 
-std::map<lua_State *, std::vector<CThreadedSocket *>> g_Socks;
+std::map< lua_State *, std::vector<CThreadedSocket *> > g_Socks;
 
 size_t GetStringSize(lua_State *L, int stackPos)
 {

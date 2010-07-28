@@ -62,10 +62,10 @@ public:
 			free(m_pData);
 
 		m_iDataSize = size;
-		m_pData = (unsigned char *)malloc(m_iDataSize + sizeof(__int64));
+		m_pData = (unsigned char *)malloc(m_iDataSize + sizeof(double));
 
 		memcpy(m_pData, data, m_iDataSize);
-		memset(&m_pData[m_iDataSize], NULL, sizeof(__int64)); // This is to prevent C-String functions overflowing. And from over reading.
+		memset(&m_pData[m_iDataSize], NULL, sizeof(double)); // This is to prevent C-String functions overflowing. And from over reading.
 	};
 
 	const unsigned char *GetData(size_t &o_Size)
