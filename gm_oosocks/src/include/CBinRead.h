@@ -94,7 +94,7 @@ public:
 		return ret;
 	};
 
-	int ReadFloat(void)
+	float ReadFloat(void)
 	{
 		if(m_pData == NULL || m_iReadPosition >= m_iDataSize)
 			return 0;
