@@ -640,27 +640,40 @@ protected:
 			return NULL;
 
 		bool alternatingBuffer = false;
-		bool completedACall = false;
+
+		std::queue<SOCK_CALL::SockCall *> queueCalls;
+		std::queue<SOCK_CALL::SockCall *> queueRecvCalls;
 
 		while(socket->m_bRunning)
 		{
-			completedACall = false;
+			bool completedACall = false;
 
-			socket->m_inCalls_LOCK.Lock();
-			SOCK_CALL::SockCall *call = NULL;
+			// Copy over calls.
+			while(socket->m_inCalls.size() > 0)
+			{
+				queueCalls.push(socket->PopCall());
+			}
 
+			while(socket->m_inCallsRecv.size() > 0)
+			{
+				queueRecvCalls.push(socket->PopCallRecv());
+			}
+
+			std::queue<SOCK_CALL::SockCall *> *callBuffer = NULL;
 			if(alternatingBuffer)
 			{
-				if(socket->m_inCalls.size() > 0)
-					call = socket->m_inCalls.front();
+				callBuffer = &queueCalls;
 			}
 			else
 			{
-				if(socket->m_inCallsRecv.size() > 0)
-					call = socket->m_inCallsRecv.front();
+				callBuffer = &queueRecvCalls;
 			}
 
-			socket->m_inCalls_LOCK.Unlock();
+			SOCK_CALL::SockCall *call = NULL;
+			if(callBuffer->size() > 0)
+			{
+				call = callBuffer->front();
+			}
 
 			if(call)
 			{
@@ -683,13 +696,8 @@ protected:
 
 						socket->PushResult(result);
 						
-						socket->m_inCalls_LOCK.Lock();
-						if(alternatingBuffer)
-							socket->m_inCalls.pop();
-						else
-							socket->m_inCallsRecv.pop();
+						callBuffer->pop();
 						delete call;
-						socket->m_inCalls_LOCK.Unlock();
 						completedACall = true;
 					}
 					break;
@@ -738,13 +746,8 @@ protected:
 
 						socket->PushResult(result);
 						
-						socket->m_inCalls_LOCK.Lock();
-						if(alternatingBuffer)
-							socket->m_inCalls.pop();
-						else
-							socket->m_inCallsRecv.pop();
+						callBuffer->pop();
 						delete call;
-						socket->m_inCalls_LOCK.Unlock();
 						completedACall = true;
 					}
 					break;
@@ -793,13 +796,8 @@ protected:
 
 						socket->PushResult(result);
 						
-						socket->m_inCalls_LOCK.Lock();
-						if(alternatingBuffer)
-							socket->m_inCalls.pop();
-						else
-							socket->m_inCallsRecv.pop();
+						callBuffer->pop();
 						delete call;
-						socket->m_inCalls_LOCK.Unlock();
 						completedACall = true;
 					}
 					break;
@@ -855,13 +853,8 @@ protected:
 
 						socket->PushResult(result);
 						
-						socket->m_inCalls_LOCK.Lock();
-						if(alternatingBuffer)
-							socket->m_inCalls.pop();
-						else
-							socket->m_inCallsRecv.pop();
+						callBuffer->pop();
 						delete call;
-						socket->m_inCalls_LOCK.Unlock();
 						completedACall = true;
 					}
 					break;
@@ -907,13 +900,8 @@ protected:
 
 						socket->PushResult(result);
 						
-						socket->m_inCalls_LOCK.Lock();
-						if(alternatingBuffer)
-							socket->m_inCalls.pop();
-						else
-							socket->m_inCallsRecv.pop();
+						callBuffer->pop();
 						delete call;
-						socket->m_inCalls_LOCK.Unlock();
 						completedACall = true;
 					}
 					break;
@@ -938,13 +926,8 @@ protected:
 
 						socket->PushResult(result);
 						
-						socket->m_inCalls_LOCK.Lock();
-						if(alternatingBuffer)
-							socket->m_inCalls.pop();
-						else
-							socket->m_inCallsRecv.pop();
+						callBuffer->pop();
 						delete call;
-						socket->m_inCalls_LOCK.Unlock();
 						completedACall = true;
 					}
 					break;
@@ -960,13 +943,8 @@ protected:
 
 						socket->PushResult(result);
 						
-						socket->m_inCalls_LOCK.Lock();
-						if(alternatingBuffer)
-							socket->m_inCalls.pop();
-						else
-							socket->m_inCallsRecv.pop();
+						callBuffer->pop();
 						delete call;
-						socket->m_inCalls_LOCK.Unlock();
 						completedACall = true;
 					}
 					break;
@@ -998,25 +976,15 @@ protected:
 
 						socket->PushResult(result);
 						
-						socket->m_inCalls_LOCK.Lock();
-						if(alternatingBuffer)
-							socket->m_inCalls.pop();
-						else
-							socket->m_inCallsRecv.pop();
+						callBuffer->pop();
 						delete call;
-						socket->m_inCalls_LOCK.Unlock();
 						completedACall = true;
 					}
 					break;
 				default:
 					{
-						socket->m_inCalls_LOCK.Lock();
-						if(alternatingBuffer)
-							socket->m_inCalls.pop();
-						else
-							socket->m_inCallsRecv.pop();
+						callBuffer->pop();
 						delete call;
-						socket->m_inCalls_LOCK.Unlock();
 					}
 					break;
 				}
