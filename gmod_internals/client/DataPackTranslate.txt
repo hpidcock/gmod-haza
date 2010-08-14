@@ -1,0 +1,3 @@
+// Listing generated from "client.dylib" by linux_vtable_dump.ida
+// vtable block @ 0x008CD020
+/*0*/	DataPackTranslate::TranslateFileName(char  const*)

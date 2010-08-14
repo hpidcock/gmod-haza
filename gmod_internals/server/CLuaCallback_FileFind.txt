@@ -1,0 +1,8 @@
+// Listing generated from "server.dylib" by linux_vtable_dump.ida
+// vtable block @ 0x00D6FE20
+/*0*/	CLuaBaseCallback::IsFinished(void)
+/*1*/	CLuaCallback_FileFind::Run(void)
+/*2*/	CLuaCallback_FileFind::PushResult(void)
+/*3*/	CLuaCallback_FileFind::Name(void)
+/*4*/	CLuaCallback_FileFind::~CLuaCallback_FileFind()
+/*5*/	CLuaCallback_FileFind::~CLuaCallback_FileFind()

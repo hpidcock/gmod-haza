@@ -1,0 +1,4 @@
+// Listing generated from "lua_shared.dylib" by linux_vtable_dump.ida
+// vtable block @ 0x0006C878
+/*0*/	CLuaModuleManager::GetLuaInterface(lua_State *)
+/*1*/	CLuaModuleManager::GetBaseFolder(void)

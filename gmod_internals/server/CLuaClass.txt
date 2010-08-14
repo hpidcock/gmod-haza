@@ -1,0 +1,3 @@
+// Listing generated from "server.dylib" by linux_vtable_dump.ida
+// vtable block @ 0x00D6FF30
+/*0*/	CLuaClass::MetaTableDerive(void)

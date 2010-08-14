@@ -1,0 +1,10 @@
+// Listing generated from "menusystem.dylib" by linux_vtable_dump.ida
+// vtable block @ 0x001BF040
+/*0*/	CMenuSystem::~CMenuSystem()
+/*1*/	CMenuSystem::~CMenuSystem()
+/*2*/	CMenuSystem::Init(void * (*)(char  const*,int *),ILuaShared *,IGarrysMod *)
+/*3*/	CMenuSystem::Shutdown(void)
+/*4*/	CMenuSystem::SetupNetworkString(INetworkStringTableContainer *)
+/*5*/	CMenuSystem::Think(void)
+/*6*/	CMenuSystem::FrameRender(void)
+/*7*/	CMenuSystem::StartLua(void)

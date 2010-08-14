@@ -1,0 +1,16 @@
+// Listing generated from "client.dylib" by linux_vtable_dump.ida
+// vtable block @ 0x008CEB80
+/*0*/	CLuaEmitter::~CLuaEmitter()
+/*1*/	CLuaEmitter::~CLuaEmitter()
+/*2*/	CParticleEffect::Update(float)
+/*3*/	IParticleEffect::StartRender(VMatrix &)
+/*4*/	CParticleEffect::ShouldSimulate(void)
+/*5*/	CParticleEffect::SetShouldSimulate(bool)
+/*6*/	CLuaEmitter::SimulateParticles(CParticleSimulateIterator *)
+/*7*/	CLuaEmitter::RenderParticles(CParticleRenderIterator *)
+/*8*/	CParticleEffect::NotifyRemove(void)
+/*9*/	CLuaEmitter::NotifyDestroyParticle(Particle *)
+/*10*/	CParticleEffect::GetSortOrigin(void)
+/*11*/	IParticleEffect::GetParticlePosition(Particle *)
+/*12*/	CParticleEffect::GetEffectName(void)
+/*13*/	CParticleEffect::SetParticleCullRadius(float)
