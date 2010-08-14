@@ -1,0 +1,8 @@
+// Listing generated from "server.dylib" by linux_vtable_dump.ida
+// vtable block @ 0x00D6FC60
+/*0*/	CLuaGameCallback::CreateLuaObject(void)
+/*1*/	CLuaGameCallback::DestroyLuaObject(ILuaObject *)
+/*2*/	CLuaGameCallback::ErrorPrint(char  const*)
+/*3*/	CLuaGameCallback::Msg(char  const*)
+/*4*/	CLuaGameCallback::CanRunScript(bool,char  const*,uchar  const*,int)
+/*5*/	CLuaGameCallback::onRunScript(char  const*,bool)

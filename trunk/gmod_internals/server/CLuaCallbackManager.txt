@@ -1,0 +1,12 @@
+// Listing generated from "server.dylib" by linux_vtable_dump.ida
+// vtable block @ 0x00D6FBA0
+/*0*/	CLuaCallbackManager::~CLuaCallbackManager()
+/*1*/	CLuaCallbackManager::~CLuaCallbackManager()
+/*2*/	CLuaCallbackManager::IsUsingLua(void)
+/*3*/	CLuaUser::InitLibraries(ILuaInterface *)
+/*4*/	CLuaCallbackManager::OnLuaRefresh(void)
+/*5*/	CLuaUser::OnLuaNewGamemode(void)
+/*6*/	CLuaCallbackManager::Name(void)
+/*7*/	CLuaCallbackManager::FrameUpdatePreEntityThink(void)
+/*8*/	CLuaCallbackManager::Shutdown(void)
+/*9*/	CLuaCallbackManager::LevelShutdownPostEntity(void)

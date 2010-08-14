@@ -1,0 +1,8 @@
+// Listing generated from "server.dylib" by linux_vtable_dump.ida
+// vtable block @ 0x00D6FB40
+/*0*/	CLuaBaseCallback::IsFinished(void)
+/*1*/	d offset ___cxa_pure_virtual
+/*2*/	d offset ___cxa_pure_virtual
+/*3*/	d offset ___cxa_pure_virtual
+/*4*/	CLuaBaseCallback::~CLuaBaseCallback()
+/*5*/	CLuaBaseCallback::~CLuaBaseCallback()

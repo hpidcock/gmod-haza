@@ -1,0 +1,3 @@
+// Listing generated from "server.dylib" by linux_vtable_dump.ida
+// vtable block @ 0x00D6FE60
+/*0*/	CGarrysMod::StartupLoadProgress(char  const*,bool)

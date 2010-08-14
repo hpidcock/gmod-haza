@@ -1,0 +1,8 @@
+// Listing generated from "server.dylib" by linux_vtable_dump.ida
+// vtable block @ 0x00D6FF60
+/*0*/	CLuaGlobalLibrary::~CLuaGlobalLibrary()
+/*1*/	CLuaGlobalLibrary::~CLuaGlobalLibrary()
+/*2*/	CLuaUser::IsUsingLua(void)
+/*3*/	CLuaGlobalLibrary::InitLibraries(ILuaInterface *)
+/*4*/	CLuaUser::OnLuaRefresh(void)
+/*5*/	CLuaUser::OnLuaNewGamemode(void)
