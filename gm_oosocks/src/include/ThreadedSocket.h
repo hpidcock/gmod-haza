@@ -1010,7 +1010,7 @@ protected:
 #ifdef WIN32
 		SetEvent(socket->m_hClose);
 #else
-		m_hClose = true;
+		socket->m_hClose = true;
 #endif
 
 		return NULL;
