@@ -222,6 +222,7 @@ public:
 		m_hClose = CreateEvent(NULL, true, false, NULL);
 #else
 		pthread_create(&m_Thread, NULL, &ThreadProc, this);
+		m_hClose = false;
 #endif
 
 		g_Socks[L].push_back(this);
@@ -248,6 +249,7 @@ public:
 		m_hClose = CreateEvent(NULL, true, false, NULL);
 #else
 		pthread_create(&m_Thread, NULL, &ThreadProc, this);
+		m_hClose = false;
 #endif
 
 		g_Socks[L].push_back(this);
@@ -281,6 +283,9 @@ public:
 		CloseHandle(m_hClose);
 		CloseHandle(m_Thread);
 #else
+		while(!m_hClose)
+		{
+		}
 		pthread_cancel(m_Thread);
 #endif
 
@@ -711,7 +716,7 @@ protected:
 						t.tv_sec = 0;
 						t.tv_usec = 0;
 
-						select(0, &read, 0, 0, &t);
+						select(socket->m_iSocket + 1, &read, 0, 0, &t);
 
 						if(!(FD_ISSET(socket->m_iSocket, &read)))
 							break;
@@ -761,7 +766,7 @@ protected:
 						t.tv_sec = 0;
 						t.tv_usec = 0;
 
-						select(0, &read, 0, 0, &t);
+						select(socket->m_iSocket + 1, &read, 0, 0, &t);
 
 						if(!(FD_ISSET(socket->m_iSocket, &read)))
 							break;
@@ -811,7 +816,7 @@ protected:
 						t.tv_sec = 0;
 						t.tv_usec = 0;
 
-						select(0, &read, 0, 0, &t);
+						select(socket->m_iSocket + 1, &read, 0, 0, &t);
 
 						if(!(FD_ISSET(socket->m_iSocket, &read)))
 							break;
@@ -958,7 +963,7 @@ protected:
 						t.tv_sec = 0;
 						t.tv_usec = 0;
 
-						select(0, &read, 0, 0, &t);
+						select(socket->m_iSocket + 1, &read, 0, 0, &t);
 
 						if(!(FD_ISSET(socket->m_iSocket, &read)))
 							break;
@@ -995,15 +1000,17 @@ protected:
 			if(!completedACall)
 			{
 #ifdef WIN32
-				Sleep(1);
+				Sleep(0);
 #else
-				usleep(1000);
+				usleep(100);
 #endif
 			}
 		}
 
 #ifdef WIN32
 		SetEvent(socket->m_hClose);
+#else
+		m_hClose = true;
 #endif
 
 		return NULL;
@@ -1032,6 +1039,7 @@ private:
 	HANDLE m_hClose;
 #else
 	pthread_t m_Thread;
+	bool m_hClose;
 #endif
 
 	bool m_bBinaryMode;
