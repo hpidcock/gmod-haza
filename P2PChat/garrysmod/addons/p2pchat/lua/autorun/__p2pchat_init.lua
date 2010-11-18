@@ -6,11 +6,11 @@ if(CLIENT) then return end
 
 // Comma sperated table of all the other servers. This does not include this server.
 // Format is {"IP", Port}
-local const_P2PPeers = {{"192.168.1.3", 28030}, {"192.168.1.38", 28060}};
+local const_P2PPeers = {{"10.10.1.126", 28076}, {"230.11.210.126", 28067}};
 
 // This servers IP address and a spare port. Try to make the port differnt than what is here, if not people could possibly DOS your server.
-local const_P2PListenIP = "192.168.1.3";
-local const_P2PListenPort = 28015;
+local const_P2PListenIP = "10.10.1.126";
+local const_P2PListenPort = 28030;
 
 // This needs to be unique to this server and no other.
 local const_P2PUniqueName = "Sandbox#1";
@@ -25,11 +25,11 @@ local const_P2PAdminChatPrefix = "[[";
 ////////////////////////////////////////////////////////////////////
 // Do Not Edit Below Here!
 ////////////////////////////////////////////////////////////////////
-require("socket");
+require("oosocks");
 require("glon");
 
-if(!socket) then
-	Error("P2P - gm_luasocket not found!");
+if(!OOSock) then
+	Error("P2P - gm_oosocks not found!");
 	return;
 end
 
@@ -42,14 +42,37 @@ local g_NetworkPassword = util.CRC(const_P2PPassword);
 
 local g_MessageID = 0;
 
-g_Socket = socket.udp();
-g_Socket:setsockname(const_P2PListenIP, const_P2PListenPort);
-g_Socket:settimeout(0);
+g_Socket = OOSock(IPPROTO_UDP);
 
-if(!g_Socket) then
-	Error("P2P - Could not bind to listen port.");
-	return;
+function P2PCallback(socket, callType, callId, err, data, peer, peerPort)
+    if(callType == SCKCALL_BIND && err == SCKERR_OK) then
+        print("P2P - Bound.");
+        socket:ReceiveDatagram();
+    end
+     
+    if(callType == SCKCALL_SEND && err == SCKERR_OK) then
+        //print("P2P - Sent.");
+    end
+     
+    if(callType == SCKCALL_REC_DATAGRAM && err == SCKERR_OK) then
+        //print("P2P - Got '" .. data .. "'  from  " .. peer .. ":" .. tostring(peerPort));
+		socket:ReceiveDatagram();
+		P2PRecv(tostring(data));
+    end
+     
+    if(err != SCKERR_OK) then
+		Error("P2P - Socket is dead Err: " .. err); 
+    end
 end
+
+g_Socket:SetCallback(P2PCallback);
+g_Socket:Bind(const_P2PListenIP, const_P2PListenPort);
+
+function P2PShutdown()
+	g_Socket:Close();
+	g_Socket = nil;
+end
+hook.Add("ShutDown", "P2PShutdown", P2PShutdown);
 
 function P2PEnque(plyName, plySteamID, text, adminonly)
 	g_MessageID = g_MessageID + 1;
@@ -71,13 +94,11 @@ function P2PEnque(plyName, plySteamID, text, adminonly)
 	end
 	
 	for _, v in ipairs(const_P2PPeers) do
-		g_Socket:sendto(encoded, tostring(v[1]), tonumber(v[2]));
+		g_Socket:Send(encoded, tostring(v[1]), tonumber(v[2]));
 	end
 end
 
-function P2PRecv()
-	local datagram = g_Socket:receive();
-	
+function P2PRecv(datagram)	
 	if(!datagram) then return; end
 	
 	local valid, decoded = pcall(glon.decode, datagram);
@@ -94,7 +115,6 @@ function P2PRecv()
 	// Incase we get the same message twice, for some strange reason.
 	g_RecvQue[decoded[2]] = decoded;
 end
-hook.Add("Think", "P2PRecv", P2PRecv);
 
 local g_NextProcess = 0;
 function P2PProcess()
