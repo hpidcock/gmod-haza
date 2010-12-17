@@ -27,24 +27,25 @@
 
 #define MT_SOCKET "OOSock"
 #define TYPE_SOCKET 9753
+#define MAX_SOCK_OPS 512
 
 #include "GMLuaModule.h"
 
 #include "CBinRead.h"
 
 #ifdef WIN32
-	#include <Windows.h>
+#include <Windows.h>
 #else
-	#include <sys/socket.h>
-	#include <pthread.h>
-	#include <netinet/in.h>
-	#include <arpa/inet.h>
-	#include <sys/wait.h>
-	#include <unistd.h>
-	#include <netdb.h>
-	#include <sys/types.h>
-	#include <errno.h>
-	#include <string.h>
+#include <sys/socket.h>
+#include <pthread.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <netdb.h>
+#include <sys/types.h>
+#include <errno.h>
+#include <string.h>
 #endif
 
 #include "CString.h"
@@ -53,11 +54,11 @@
 #include <map>
 
 #ifdef WIN32
-	#pragma once
+#pragma once
 #endif
 
 #ifdef WIN32
-	typedef int socklen_t;
+typedef int socklen_t;
 #endif
 
 #ifndef __THREADEDSOCKET_H__
@@ -98,7 +99,7 @@ public:
 
 private:
 	CMutexLock(const CMutexLock &other) { };
-	
+
 #ifdef WIN32
 	CRITICAL_SECTION m_Lock;
 #else
@@ -212,7 +213,7 @@ public:
 
 		char yes = 1;
 		setsockopt(m_iSocket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
-		
+
 		m_Addr.sin_family = AF_INET;
 
 		m_bRunning = true;
@@ -403,7 +404,7 @@ public:
 		call->call = SOCK_CALL::BIND;
 		call->integer = port;
 		call->string = ip;
-		
+
 		call->peer = CString("", 0);
 
 		PushCall(call);
@@ -420,7 +421,7 @@ public:
 		call->call = SOCK_CALL::CONNECT;
 		call->integer = port;
 		call->string = ip;
-		
+
 		call->peer = CString("", 0);
 
 		PushCall(call);
@@ -529,11 +530,11 @@ public:
 
 	void Close(void)
 	{
-		#ifdef WIN32
-			closesocket(m_iSocket);		
-		#else
-			close(m_iSocket);
-		#endif
+#ifdef WIN32
+		closesocket(m_iSocket);		
+#else
+		close(m_iSocket);
+#endif
 	};
 
 protected:
@@ -543,7 +544,7 @@ protected:
 		m_inCalls.push(call);
 		m_inCalls_LOCK.Unlock();
 	};
-	
+
 	void PushCallRecv(SOCK_CALL::SockCall *call)
 	{
 		m_inCalls_LOCK.Lock();
@@ -561,7 +562,7 @@ protected:
 	SOCK_CALL::SockCallResult *PopResult(void)
 	{
 		SOCK_CALL::SockCallResult *result = NULL;
-		
+
 		m_outResults_LOCK.Lock();
 
 		if(m_outResults.size() > 0)
@@ -578,7 +579,7 @@ protected:
 	SOCK_CALL::SockCall *PopCall(void)
 	{
 		SOCK_CALL::SockCall *result = NULL;
-		
+
 		m_inCalls_LOCK.Lock();
 
 		if(m_inCalls.size() > 0)
@@ -595,7 +596,7 @@ protected:
 	SOCK_CALL::SockCall *PopCallRecv(void)
 	{
 		SOCK_CALL::SockCall *result = NULL;
-		
+
 		m_inCalls_LOCK.Lock();
 
 		if(m_inCallsRecv.size() > 0)
@@ -612,7 +613,7 @@ protected:
 	struct in_addr* GetHostByName(const char* server)
 	{
 		struct hostent *h = gethostbyname(server);
-		
+
 		if(h == NULL)
 			return NULL;
 
@@ -624,11 +625,11 @@ protected:
 		if(returnCode >= ok)
 			return SOCK_ERROR::OK;
 
-	#ifdef WIN32
+#ifdef WIN32
 		int error = WSAGetLastError();
-	#else
+#else
 		int error = errno;
-	#endif
+#endif
 
 		return SOCK_ERROR::Translate(error);
 	}
@@ -651,360 +652,350 @@ protected:
 
 		while(socket->m_bRunning)
 		{
-			bool completedACall = false;
+			for(int ittor = 0; ittor < MAX_SOCK_OPS; ittor++)
+			{
 
-			// Copy over calls.
-			while(socket->m_inCalls.size() > 0)
-			{
-				queueCalls.push(socket->PopCall());
-			}
-
-			while(socket->m_inCallsRecv.size() > 0)
-			{
-				queueRecvCalls.push(socket->PopCallRecv());
-			}
-
-			std::queue<SOCK_CALL::SockCall *> *callBuffer = NULL;
-			if(alternatingBuffer)
-			{
-				callBuffer = &queueCalls;
-			}
-			else
-			{
-				callBuffer = &queueRecvCalls;
-			}
-
-			SOCK_CALL::SockCall *call = NULL;
-			if(callBuffer->size() > 0)
-			{
-				call = callBuffer->front();
-			}
-
-			if(call)
-			{
-				switch(call->call)
+				// Copy over calls.
+				while(socket->m_inCalls.size() > 0)
 				{
-				case SOCK_CALL::CONNECT:
+					queueCalls.push(socket->PopCall());
+				}
+
+				while(socket->m_inCallsRecv.size() > 0)
+				{
+					queueRecvCalls.push(socket->PopCallRecv());
+				}
+
+				std::queue<SOCK_CALL::SockCall *> *callBuffer = NULL;
+				if(alternatingBuffer)
+				{
+					callBuffer = &queueCalls;
+				}
+				else
+				{
+					callBuffer = &queueRecvCalls;
+				}
+
+				SOCK_CALL::SockCall *call = NULL;
+				if(callBuffer->size() > 0)
+				{
+					call = callBuffer->front();
+				}
+
+				if(call)
+				{
+					switch(call->call)
 					{
-						socket->m_Addr.sin_port = htons(call->integer);
-						socket->m_Addr.sin_addr = *socket->GetHostByName(call->string.Str());
-
-						memset(socket->m_Addr.sin_zero, NULL, sizeof(socket->m_Addr.sin_zero));
-		    
-						SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
-						result->call = call->call;
-						result->callId = call->callId;
-
-						result->error = connect(socket->m_iSocket, (struct sockaddr *)&socket->m_Addr, sizeof(socket->m_Addr));
-
-						result->error = socket->CheckError(result->error, 0);
-
-						socket->PushResult(result);
-						
-						callBuffer->pop();
-						delete call;
-						completedACall = true;
-					}
-					break;
-				case SOCK_CALL::REC_SIZE:
-					{
-						fd_set read;
-						memset(&read, NULL, sizeof(fd_set));
-						FD_SET(socket->m_iSocket, &read);
-
-						timeval t;
-						t.tv_sec = 0;
-						t.tv_usec = 0;
-
-						select(socket->m_iSocket + 1, &read, 0, 0, &t);
-
-						if(!(FD_ISSET(socket->m_iSocket, &read)))
-							break;
-
-						SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
-						result->call = call->call;
-						result->callId = call->callId;
-
-						int count = 0;
-						char *buffer = (char *)malloc(call->integer + 1);
-						sockaddr addr;
-						socklen_t addrSz = sizeof(sockaddr);
-
-						result->error = recvfrom(socket->m_iSocket, buffer, call->integer, 0, &addr, &addrSz);
-
-						size_t length = result->error;
-
-						if(result->error < 0)
-						{
-							length = 0;
-						}
-
-						result->data = CString(buffer, length);
-
-						free(buffer);
-
-						char *peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
-						result->peer = CString(peer, strlen(peer));
-						result->secondary = ntohs(((sockaddr_in *)&addr)->sin_port);
-
-						result->error = socket->CheckError(result->error, 0);
-
-						socket->PushResult(result);
-						
-						callBuffer->pop();
-						delete call;
-						completedACall = true;
-					}
-					break;
-				case SOCK_CALL::REC_LINE:
-					{
-						fd_set read;
-						memset(&read, NULL, sizeof(fd_set));
-						FD_SET(socket->m_iSocket, &read);
-
-						timeval t;
-						t.tv_sec = 0;
-						t.tv_usec = 0;
-
-						select(socket->m_iSocket + 1, &read, 0, 0, &t);
-
-						if(!(FD_ISSET(socket->m_iSocket, &read)))
-							break;
-
-						SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
-						result->call = call->call;
-						result->callId = call->callId;
-
-						char buffer = 0;
-						std::string fullBuffer = "";
-
-						sockaddr addr;
-						socklen_t addrSz = sizeof(sockaddr);
-
-						while((result->error = recvfrom(socket->m_iSocket, &buffer, 1, 0, &addr, &addrSz)) == 1)
-						{
-							if(buffer == '\n')
-								break;
-
-							fullBuffer.append(1, buffer);
-
-							addrSz = sizeof(sockaddr);
-						}
-
-						result->data = CString(fullBuffer.c_str(), fullBuffer.size());
-
-						char *peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
-						result->peer = CString(peer, strlen(peer));
-						result->secondary = ntohs(((sockaddr_in *)&addr)->sin_port);
-
-						result->error = socket->CheckError(result->error, 0);
-
-						socket->PushResult(result);
-						
-						callBuffer->pop();
-						delete call;
-						completedACall = true;
-					}
-					break;
-				case SOCK_CALL::REC_DATAGRAM:
-					{
-						fd_set read;
-						memset(&read, NULL, sizeof(fd_set));
-						FD_SET(socket->m_iSocket, &read);
-
-						timeval t;
-						t.tv_sec = 0;
-						t.tv_usec = 0;
-
-						select(socket->m_iSocket + 1, &read, 0, 0, &t);
-
-						if(!(FD_ISSET(socket->m_iSocket, &read)))
-							break;
-
-						SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
-						result->call = call->call;
-						result->callId = call->callId;
-
-						int count = 0;
-						char *buffer = (char *)malloc(1500);
-						sockaddr addr;
-						socklen_t addrSz = sizeof(sockaddr);
-
-						result->error = recvfrom(socket->m_iSocket, buffer, 1500, 0, &addr, &addrSz);
-
-						if(result->error == 0)
-						{
-							// No Data
-							free(buffer);
-							break;
-						}
-
-						size_t length = result->error;
-
-						if(result->error < 0)
-						{
-							length = 0;
-						}
-
-						result->data = CString(buffer, length);
-
-						free(buffer);
-
-						char *peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
-						result->peer = CString(peer, strlen(peer));
-						result->secondary = ntohs(((sockaddr_in *)&addr)->sin_port);
-
-						result->error = socket->CheckError(result->error, 0);
-
-						socket->PushResult(result);
-						
-						callBuffer->pop();
-						delete call;
-						completedACall = true;
-					}
-					break;
-				case SOCK_CALL::SEND:
-					{
-						SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
-						result->call = call->call;
-						result->callId = call->callId;
-
-						CString msg = call->string;
-						int total = 0;
-						int len = msg.Size();
-						int bytesleft = len;
-						int n = -1;
-
-						struct sockaddr *addr = NULL;
-
-						if(call->peer.Size() != 0)
+					case SOCK_CALL::CONNECT:
 						{
 							socket->m_Addr.sin_port = htons(call->integer);
-							socket->m_Addr.sin_addr = *socket->GetHostByName(call->peer.Str());
+							socket->m_Addr.sin_addr = *socket->GetHostByName(call->string.Str());
 
 							memset(socket->m_Addr.sin_zero, NULL, sizeof(socket->m_Addr.sin_zero));
 
-							addr = (struct sockaddr *)&socket->m_Addr;
-						}
+							SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+							result->call = call->call;
+							result->callId = call->callId;
 
-						while(total < len)
+							result->error = connect(socket->m_iSocket, (struct sockaddr *)&socket->m_Addr, sizeof(socket->m_Addr));
+
+							result->error = socket->CheckError(result->error, 0);
+
+							socket->PushResult(result);
+
+							callBuffer->pop();
+							delete call;
+						}
+						break;
+					case SOCK_CALL::REC_SIZE:
 						{
-							if(addr == NULL)
-    							n = send(socket->m_iSocket, msg.Str() + total, bytesleft, 0);
-							else
-								n = sendto(socket->m_iSocket, msg.Str() + total, bytesleft, 0, addr, sizeof(sockaddr_in));
-							if(n <= 0)
+							fd_set read;
+							memset(&read, NULL, sizeof(fd_set));
+							FD_SET(socket->m_iSocket, &read);
+
+							timeval t;
+							t.tv_sec = 0;
+							t.tv_usec = 0;
+
+							select(socket->m_iSocket + 1, &read, 0, 0, &t);
+
+							if(!(FD_ISSET(socket->m_iSocket, &read)))
 								break;
-							total += n;
-							bytesleft -= n;
+
+							SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+							result->call = call->call;
+							result->callId = call->callId;
+
+							int count = 0;
+							char *buffer = (char *)malloc(call->integer + 1);
+							sockaddr addr;
+							socklen_t addrSz = sizeof(sockaddr);
+
+							result->error = recvfrom(socket->m_iSocket, buffer, call->integer, 0, &addr, &addrSz);
+
+							size_t length = result->error;
+
+							if(result->error < 0)
+							{
+								length = 0;
+							}
+
+							result->data = CString(buffer, length);
+
+							free(buffer);
+
+							char *peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
+							result->peer = CString(peer, strlen(peer));
+							result->secondary = ntohs(((sockaddr_in *)&addr)->sin_port);
+
+							result->error = socket->CheckError(result->error, 0);
+
+							socket->PushResult(result);
+
+							callBuffer->pop();
+							delete call;
 						}
+						break;
+					case SOCK_CALL::REC_LINE:
+						{
+							fd_set read;
+							memset(&read, NULL, sizeof(fd_set));
+							FD_SET(socket->m_iSocket, &read);
 
-						result->error = n;
+							timeval t;
+							t.tv_sec = 0;
+							t.tv_usec = 0;
 
-						result->error = socket->CheckError(result->error, 0);
+							select(socket->m_iSocket + 1, &read, 0, 0, &t);
 
-						socket->PushResult(result);
-						
-						callBuffer->pop();
-						delete call;
-						completedACall = true;
+							if(!(FD_ISSET(socket->m_iSocket, &read)))
+								break;
+
+							SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+							result->call = call->call;
+							result->callId = call->callId;
+
+							char buffer = 0;
+							std::string fullBuffer = "";
+
+							sockaddr addr;
+							socklen_t addrSz = sizeof(sockaddr);
+
+							while((result->error = recvfrom(socket->m_iSocket, &buffer, 1, 0, &addr, &addrSz)) == 1)
+							{
+								if(buffer == '\n')
+									break;
+
+								fullBuffer.append(1, buffer);
+
+								addrSz = sizeof(sockaddr);
+							}
+
+							result->data = CString(fullBuffer.c_str(), fullBuffer.size());
+
+							char *peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
+							result->peer = CString(peer, strlen(peer));
+							result->secondary = ntohs(((sockaddr_in *)&addr)->sin_port);
+
+							result->error = socket->CheckError(result->error, 0);
+
+							socket->PushResult(result);
+
+							callBuffer->pop();
+							delete call;
+						}
+						break;
+					case SOCK_CALL::REC_DATAGRAM:
+						{
+							fd_set read;
+							memset(&read, NULL, sizeof(fd_set));
+							FD_SET(socket->m_iSocket, &read);
+
+							timeval t;
+							t.tv_sec = 0;
+							t.tv_usec = 0;
+
+							select(socket->m_iSocket + 1, &read, 0, 0, &t);
+
+							if(!(FD_ISSET(socket->m_iSocket, &read)))
+								break;
+
+							SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+							result->call = call->call;
+							result->callId = call->callId;
+
+							int count = 0;
+							char *buffer = (char *)malloc(1500);
+							sockaddr addr;
+							socklen_t addrSz = sizeof(sockaddr);
+
+							result->error = recvfrom(socket->m_iSocket, buffer, 1500, 0, &addr, &addrSz);
+
+							if(result->error == 0)
+							{
+								// No Data
+								free(buffer);
+								break;
+							}
+
+							size_t length = result->error;
+
+							if(result->error < 0)
+							{
+								length = 0;
+							}
+
+							result->data = CString(buffer, length);
+
+							free(buffer);
+
+							char *peer = inet_ntoa(((sockaddr_in *)&addr)->sin_addr);
+							result->peer = CString(peer, strlen(peer));
+							result->secondary = ntohs(((sockaddr_in *)&addr)->sin_port);
+
+							result->error = socket->CheckError(result->error, 0);
+
+							socket->PushResult(result);
+
+							callBuffer->pop();
+							delete call;
+						}
+						break;
+					case SOCK_CALL::SEND:
+						{
+							SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+							result->call = call->call;
+							result->callId = call->callId;
+
+							CString msg = call->string;
+							int total = 0;
+							int len = msg.Size();
+							int bytesleft = len;
+							int n = -1;
+
+							struct sockaddr *addr = NULL;
+
+							if(call->peer.Size() != 0)
+							{
+								socket->m_Addr.sin_port = htons(call->integer);
+								socket->m_Addr.sin_addr = *socket->GetHostByName(call->peer.Str());
+
+								memset(socket->m_Addr.sin_zero, NULL, sizeof(socket->m_Addr.sin_zero));
+
+								addr = (struct sockaddr *)&socket->m_Addr;
+							}
+
+							while(total < len)
+							{
+								if(addr == NULL)
+									n = send(socket->m_iSocket, msg.Str() + total, bytesleft, 0);
+								else
+									n = sendto(socket->m_iSocket, msg.Str() + total, bytesleft, 0, addr, sizeof(sockaddr_in));
+								if(n <= 0)
+									break;
+								total += n;
+								bytesleft -= n;
+							}
+
+							result->error = n;
+
+							result->error = socket->CheckError(result->error, 0);
+
+							socket->PushResult(result);
+
+							callBuffer->pop();
+							delete call;
+						}
+						break;
+					case SOCK_CALL::BIND:
+						{
+							socket->m_Addr.sin_port = htons(call->integer);
+
+							if(call->string.Size() != 0)
+								socket->m_Addr.sin_addr = *socket->GetHostByName(call->string.Str());
+							else
+								socket->m_Addr.sin_addr.s_addr = INADDR_ANY;
+
+							memset(socket->m_Addr.sin_zero, NULL, sizeof(socket->m_Addr.sin_zero));
+
+							SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+							result->call = call->call;
+							result->callId = call->callId;
+
+							result->error = bind(socket->m_iSocket, (struct sockaddr *)&socket->m_Addr, sizeof(socket->m_Addr));
+
+							result->error = socket->CheckError(result->error, 0);
+
+							socket->PushResult(result);
+
+							callBuffer->pop();
+							delete call;
+						}
+						break;
+					case SOCK_CALL::LISTEN:
+						{
+							SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+							result->call = call->call;
+							result->callId = call->callId;
+
+							result->error = listen(socket->m_iSocket, call->integer);
+
+							result->error = socket->CheckError(result->error, 0);
+
+							socket->PushResult(result);
+
+							callBuffer->pop();
+							delete call;
+						}
+						break;
+					case SOCK_CALL::ACCEPT:
+						{
+							fd_set read;
+							memset(&read, NULL, sizeof(fd_set));
+							FD_SET(socket->m_iSocket, &read);
+
+							timeval t;
+							t.tv_sec = 0;
+							t.tv_usec = 0;
+
+							select(socket->m_iSocket + 1, &read, 0, 0, &t);
+
+							if(!(FD_ISSET(socket->m_iSocket, &read)))
+								break;
+
+							struct sockaddr_in their_addr;
+							socklen_t size = sizeof(their_addr);
+
+							SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
+							result->call = call->call;
+							result->callId = call->callId;
+
+							result->secondary = accept(socket->m_iSocket, (struct sockaddr*)&their_addr, &size);
+
+							result->error = socket->CheckError(result->secondary, 0);
+
+							socket->PushResult(result);
+
+							callBuffer->pop();
+							delete call;
+						}
+						break;
+					default:
+						{
+							callBuffer->pop();
+							delete call;
+						}
+						break;
 					}
-					break;
-				case SOCK_CALL::BIND:
-					{
-						socket->m_Addr.sin_port = htons(call->integer);
-
-						if(call->string.Size() != 0)
-							socket->m_Addr.sin_addr = *socket->GetHostByName(call->string.Str());
-						else
-							socket->m_Addr.sin_addr.s_addr = INADDR_ANY;
-
-						memset(socket->m_Addr.sin_zero, NULL, sizeof(socket->m_Addr.sin_zero));
-		    
-						SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
-						result->call = call->call;
-						result->callId = call->callId;
-
-						result->error = bind(socket->m_iSocket, (struct sockaddr *)&socket->m_Addr, sizeof(socket->m_Addr));
-
-						result->error = socket->CheckError(result->error, 0);
-
-						socket->PushResult(result);
-						
-						callBuffer->pop();
-						delete call;
-						completedACall = true;
-					}
-					break;
-				case SOCK_CALL::LISTEN:
-					{
-						SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
-						result->call = call->call;
-						result->callId = call->callId;
-
-						result->error = listen(socket->m_iSocket, call->integer);
-
-						result->error = socket->CheckError(result->error, 0);
-
-						socket->PushResult(result);
-						
-						callBuffer->pop();
-						delete call;
-						completedACall = true;
-					}
-					break;
-				case SOCK_CALL::ACCEPT:
-					{
-						fd_set read;
-						memset(&read, NULL, sizeof(fd_set));
-						FD_SET(socket->m_iSocket, &read);
-
-						timeval t;
-						t.tv_sec = 0;
-						t.tv_usec = 0;
-
-						select(socket->m_iSocket + 1, &read, 0, 0, &t);
-
-						if(!(FD_ISSET(socket->m_iSocket, &read)))
-							break;
-
-						struct sockaddr_in their_addr;
-						socklen_t size = sizeof(their_addr);
-						
-						SOCK_CALL::SockCallResult *result = new SOCK_CALL::SockCallResult();
-						result->call = call->call;
-						result->callId = call->callId;
-
-						result->secondary = accept(socket->m_iSocket, (struct sockaddr*)&their_addr, &size);
-
-						result->error = socket->CheckError(result->secondary, 0);
-
-						socket->PushResult(result);
-						
-						callBuffer->pop();
-						delete call;
-						completedACall = true;
-					}
-					break;
-				default:
-					{
-						callBuffer->pop();
-						delete call;
-					}
-					break;
 				}
-			}
 
-			alternatingBuffer = !alternatingBuffer;
-			
-			if(!completedACall)
-			{
-#ifdef WIN32
-				Sleep(0);
-#else
-				usleep(100);
-#endif
+				alternatingBuffer = !alternatingBuffer;
 			}
+#ifdef WIN32
+			Sleep(0);
+#else
+			usleep(0);
+#endif
 		}
 
 #ifdef WIN32

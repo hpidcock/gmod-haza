@@ -3,6 +3,7 @@
 #include "GMLuaModule.h"
 #include "ThreadedSocket.h"
 #include "CBinRead.h"
+#include "CBinWrite.h"
 
 #ifdef WIN32
 #undef GetObject
@@ -143,20 +144,39 @@ namespace OOSock
 	LUA_FUNCTION(Send)
 	{
 		Lua()->CheckType(1, TYPE_SOCKET);
-		Lua()->CheckType(2, GLua::TYPE_STRING);
 
 		CThreadedSocket *sock = reinterpret_cast<CThreadedSocket *>(Lua()->GetUserData(1));
 
 		if(sock == NULL)
 			return 0;
 
-		if(Lua()->GetType(3) == GLua::TYPE_STRING && Lua()->GetType(4) == GLua::TYPE_NUMBER)
+		CString data;
+		if(Lua()->GetType(2) == GLua::TYPE_STRING)
 		{
-			Lua()->Push((float)sock->Send(CString(Lua()->GetString(2), GetStringSize(L, 2)), CString(Lua()->GetString(3), GetStringSize(L, 3)), Lua()->GetInteger(4)));
+			data = CString(Lua()->GetString(2), GetStringSize(L, 2));
+		}
+		else if(Lua()->GetType(2) == TYPE_BINWRITE)
+		{
+			CBinWrite *write = reinterpret_cast<CBinWrite *>(Lua()->GetUserData(1));
+
+			if(write == NULL)
+				return 0;
+
+			size_t size = 0;
+			data = CString((const char *)write->GetData(size), size);
 		}
 		else
 		{
-			Lua()->Push((float)sock->Send(CString(Lua()->GetString(2), GetStringSize(L, 2))));
+			return 0;
+		}
+
+		if(Lua()->GetType(3) == GLua::TYPE_STRING && Lua()->GetType(4) == GLua::TYPE_NUMBER)
+		{
+			Lua()->Push((float)sock->Send(data, CString(Lua()->GetString(3), GetStringSize(L, 3)), Lua()->GetInteger(4)));
+		}
+		else
+		{
+			Lua()->Push((float)sock->Send(data));
 		}
 
 		return 1;
@@ -417,6 +437,112 @@ namespace BinRead
 	};
 }
 
+namespace BinWrite
+{
+	LUA_FUNCTION(__delete)
+	{
+		Lua()->CheckType(1, TYPE_BINWRITE);
+
+		CBinWrite *write = reinterpret_cast<CBinWrite *>(Lua()->GetUserData(1));
+
+		if(write == NULL)
+			return 0;
+
+		delete write;
+
+		return 0;
+	};
+
+	LUA_FUNCTION(GetSize)
+	{
+		Lua()->CheckType(1, TYPE_BINWRITE);
+
+		CBinWrite *write = reinterpret_cast<CBinWrite *>(Lua()->GetUserData(1));
+
+		if(write == NULL)
+			return 0;
+
+		Lua()->Push((float)write->GetSize());
+
+		return 1;
+	};
+
+	LUA_FUNCTION(WriteDouble)
+	{
+		Lua()->CheckType(1, TYPE_BINWRITE);
+		Lua()->CheckType(2, GLua::TYPE_NUMBER);
+
+		CBinWrite *write = reinterpret_cast<CBinWrite *>(Lua()->GetUserData(1));
+
+		if(write == NULL)
+			return 0;
+
+		write->Write((double)Lua()->GetDouble(2));
+
+		return 0;
+	};
+
+	LUA_FUNCTION(WriteFloat)
+	{
+		Lua()->CheckType(1, TYPE_BINWRITE);
+		Lua()->CheckType(2, GLua::TYPE_NUMBER);
+
+		CBinWrite *write = reinterpret_cast<CBinWrite *>(Lua()->GetUserData(1));
+
+		if(write == NULL)
+			return 0;
+
+		write->Write((float)Lua()->GetNumber(2));
+
+		return 0;
+	};
+
+	LUA_FUNCTION(WriteInt)
+	{
+		Lua()->CheckType(1, TYPE_BINWRITE);
+		Lua()->CheckType(2, GLua::TYPE_NUMBER);
+
+		CBinWrite *write = reinterpret_cast<CBinWrite *>(Lua()->GetUserData(1));
+
+		if(write == NULL)
+			return 0;
+
+		write->Write((int)Lua()->GetInteger(2));
+
+		return 0;
+	};
+
+	LUA_FUNCTION(WriteByte)
+	{
+		Lua()->CheckType(1, TYPE_BINWRITE);
+		Lua()->CheckType(2, GLua::TYPE_NUMBER);
+
+		CBinWrite *write = reinterpret_cast<CBinWrite *>(Lua()->GetUserData(1));
+
+		if(write == NULL)
+			return 0;
+
+		write->Write((char)Lua()->GetInteger(2));
+
+		return 0;
+	};
+
+	LUA_FUNCTION(WriteString)
+	{
+		Lua()->CheckType(1, TYPE_BINWRITE);
+		Lua()->CheckType(2, GLua::TYPE_STRING);
+
+		CBinWrite *write = reinterpret_cast<CBinWrite *>(Lua()->GetUserData(1));
+
+		if(write == NULL)
+			return 0;
+
+		write->Write(Lua()->GetString(2), GetStringSize(L, 2));
+
+		return 0;
+	};
+}
+
 int Init(lua_State* L)
 {
 	g_Socks[L] = std::vector<CThreadedSocket *>();
@@ -465,6 +591,21 @@ int Init(lua_State* L)
 		metaBinRead->SetMember("__index", __index);
 	}
 	metaBinRead->SetMember("__gc", BinRead::__delete);
+
+	CAutoUnRef metaBinWrite = Lua()->GetMetaTable(MT_BINWRITE, TYPE_BINWRITE);
+	{
+		CAutoUnRef __index = Lua()->GetNewTable();
+
+		__index->SetMember("GetSize", BinWrite::GetSize);
+		__index->SetMember("WriteByte", BinWrite::WriteByte);
+		__index->SetMember("WriteDouble", BinWrite::WriteDouble);
+		__index->SetMember("WriteInt", BinWrite::WriteInt);
+		__index->SetMember("WriteFloat", BinWrite::WriteFloat);
+		__index->SetMember("WriteString", BinWrite::WriteString);
+
+		metaBinWrite->SetMember("__index", __index);
+	}
+	metaBinWrite->SetMember("__gc", BinWrite::__delete);
 
 	Lua()->SetGlobal("OOSock", OOSock::__new);
 	Lua()->SetGlobal("IPPROTO_TCP", (float)IPPROTO_TCP);
