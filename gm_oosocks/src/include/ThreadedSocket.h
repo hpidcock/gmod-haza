@@ -27,7 +27,7 @@
 
 #define MT_SOCKET "OOSock"
 #define TYPE_SOCKET 9753
-#define MAX_SOCK_OPS 512
+#define MAX_SOCK_OPS 64
 
 #include "GMLuaModule.h"
 
@@ -157,6 +157,7 @@ namespace SOCK_CALL
 		CALL call;
 		int error;
 		int secondary;
+		int sockout;
 		CString data;
 		CString peer;
 	};
@@ -487,7 +488,7 @@ public:
 				{
 					if(result->error == SOCK_ERROR::OK)
 					{
-						CThreadedSocket *newSock = new CThreadedSocket(L, result->secondary, true);
+						CThreadedSocket *newSock = new CThreadedSocket(L, result->sockout, true);
 						newSock->Ref();
 						Lua()->PushUserData(meta, static_cast<void *>(newSock));
 					}
@@ -496,7 +497,7 @@ public:
 						Lua()->PushNil();
 					}
 					Lua()->Push(result->peer.Str());
-					Lua()->PushNil();
+					Lua()->Push((float)result->secondary);
 				}
 				else
 				{
@@ -654,7 +655,6 @@ protected:
 		{
 			for(int ittor = 0; ittor < MAX_SOCK_OPS; ittor++)
 			{
-
 				// Copy over calls.
 				while(socket->m_inCalls.size() > 0)
 				{
@@ -970,9 +970,13 @@ protected:
 							result->call = call->call;
 							result->callId = call->callId;
 
-							result->secondary = accept(socket->m_iSocket, (struct sockaddr*)&their_addr, &size);
+							result->sockout = accept(socket->m_iSocket, (struct sockaddr*)&their_addr, &size);
 
-							result->error = socket->CheckError(result->secondary, 0);
+							char *peer = inet_ntoa(((sockaddr_in *)&their_addr)->sin_addr);
+							result->peer = CString(peer, strlen(peer));
+							result->secondary = ntohs(((sockaddr_in *)&their_addr)->sin_port);
+
+							result->error = socket->CheckError(result->sockout, 0);
 
 							socket->PushResult(result);
 
@@ -992,9 +996,9 @@ protected:
 				alternatingBuffer = !alternatingBuffer;
 			}
 #ifdef WIN32
-			Sleep(0);
+			Sleep(1);
 #else
-			usleep(0);
+			usleep(100);
 #endif
 		}
 

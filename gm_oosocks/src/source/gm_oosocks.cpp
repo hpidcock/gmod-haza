@@ -439,6 +439,16 @@ namespace BinRead
 
 namespace BinWrite
 {
+	LUA_FUNCTION(__new)
+	{
+		CBinWrite *write = new CBinWrite(L);
+
+		CAutoUnRef meta = Lua()->GetMetaTable(MT_BINWRITE, TYPE_BINWRITE);
+		Lua()->PushUserData(meta, static_cast<void *>(write));
+
+		return 1;
+	}
+
 	LUA_FUNCTION(__delete)
 	{
 		Lua()->CheckType(1, TYPE_BINWRITE);
@@ -607,6 +617,7 @@ int Init(lua_State* L)
 	}
 	metaBinWrite->SetMember("__gc", BinWrite::__delete);
 
+	Lua()->SetGlobal("BinWrite", BinWrite::__new);
 	Lua()->SetGlobal("OOSock", OOSock::__new);
 	Lua()->SetGlobal("IPPROTO_TCP", (float)IPPROTO_TCP);
 	Lua()->SetGlobal("IPPROTO_UDP", (float)IPPROTO_UDP);
