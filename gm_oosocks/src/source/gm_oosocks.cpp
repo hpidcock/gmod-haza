@@ -555,11 +555,11 @@ namespace BinWrite
 
 int Init(lua_State* L)
 {
-	g_Socks[L] = std::vector<CThreadedSocket *>();
+	g_Socks[L].clear();
 
 #ifdef WIN32
-	WSADATA wsa_data;
-	WSAStartup(MAKEWORD(2, 0), &wsa_data);
+	//WSADATA wsa_data;
+	//WSAStartup(MAKEWORD(2, 0), &wsa_data);
 #endif
 
 	CAutoUnRef meta = Lua()->GetMetaTable(MT_SOCKET, TYPE_SOCKET);
@@ -652,19 +652,25 @@ int Init(lua_State* L)
 
 int Shutdown(lua_State* L)
 {
+	CAutoUnRef meta = Lua()->GetMetaTable(MT_SOCKET, TYPE_SOCKET);
+	Lua()->PushNil();
+	meta->SetMember("__gc");
+
 	std::vector<CThreadedSocket *> *socketsList = &g_Socks[L];
 
 	std::vector<CThreadedSocket *> copy = *socketsList;
 	std::vector<CThreadedSocket *>::iterator itor = copy.begin();
 	while(itor != copy.end())
 	{
-		delete (*itor);
+		delete (CThreadedSocket * )(*itor);
 
 		itor++;
 	}
 
+	socketsList->clear();
+
 #ifdef WIN32
-	WSACleanup();
+	//WSACleanup();
 #endif
 
 	return 0;

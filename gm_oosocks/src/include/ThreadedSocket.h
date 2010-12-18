@@ -53,6 +53,18 @@
 #include <queue>
 #include <map>
 
+#include <assert.h>
+
+#ifdef WIN32
+#undef assert
+extern "C"
+{
+	_CRTIMP void __cdecl _wassert(_In_z_ const wchar_t * _Message, _In_z_ const wchar_t *_File, _In_ unsigned _Line);
+}
+
+#define assert(_Expression) (void)( (!!(_Expression)) || (_wassert(_CRT_WIDE(#_Expression), _CRT_WIDE(__FILE__), __LINE__), 0) )
+#endif
+
 #ifdef WIN32
 #pragma once
 #endif
@@ -195,7 +207,8 @@ public:
 	bool CanDelete()
 	{
 		// We ignore Recv Calls.
-		return m_iRefCount <= 0 && m_inCalls.size() == 0 && m_outResults.size() == 0;
+		assert(m_iRefCount >= 0);
+		return m_iRefCount == 0 && m_inCalls.size() == 0 && m_outResults.size() == 0;
 	};
 
 	CThreadedSocket(lua_State *L, int protocol)
@@ -259,6 +272,9 @@ public:
 
 	~CThreadedSocket(void)
 	{
+		assert(m_iRefCount == 0);
+		assert(m_bRunning == true);
+
 		std::vector<CThreadedSocket *> *socketsList = &g_Socks[L];
 
 		std::vector<CThreadedSocket *>::iterator itor = socketsList->begin();
@@ -281,9 +297,13 @@ public:
 
 		m_bRunning = false;
 #ifdef WIN32
-		WaitForSingleObject(m_hClose, INFINITE);
-		CloseHandle(m_hClose);
-		CloseHandle(m_Thread);
+		assert(WaitForSingleObject(m_hClose, INFINITE) == WAIT_OBJECT_0);
+		DWORD exitValue = NULL;
+		while(GetExitCodeThread(m_Thread, &exitValue) && exitValue == STILL_ACTIVE)
+		{
+		}
+		assert(CloseHandle(m_hClose));
+		assert(CloseHandle(m_Thread));
 #else
 		while(!m_hClose)
 		{
