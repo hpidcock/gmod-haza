@@ -768,7 +768,7 @@ protected:
 							result->peer = CString(peer, strlen(peer));
 							result->secondary = ntohs(((sockaddr_in *)&addr)->sin_port);
 
-							result->error = socket->CheckError(result->error, 0);
+							result->error = socket->CheckError(result->error, 1);
 
 							socket->PushResult(result);
 
@@ -817,7 +817,7 @@ protected:
 							result->peer = CString(peer, strlen(peer));
 							result->secondary = ntohs(((sockaddr_in *)&addr)->sin_port);
 
-							result->error = socket->CheckError(result->error, 0);
+							result->error = socket->CheckError(result->error, fullBuffer.size() > 0 ? 0 : 1);
 
 							socket->PushResult(result);
 
@@ -873,7 +873,7 @@ protected:
 							result->peer = CString(peer, strlen(peer));
 							result->secondary = ntohs(((sockaddr_in *)&addr)->sin_port);
 
-							result->error = socket->CheckError(result->error, 0);
+							result->error = socket->CheckError(result->error, 1);
 
 							socket->PushResult(result);
 
