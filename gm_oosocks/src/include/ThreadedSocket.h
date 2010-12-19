@@ -272,9 +272,6 @@ public:
 
 	~CThreadedSocket(void)
 	{
-		assert(m_iRefCount == 0);
-		assert(m_bRunning == true);
-
 		std::vector<CThreadedSocket *> *socketsList = &g_Socks[L];
 
 		std::vector<CThreadedSocket *>::iterator itor = socketsList->begin();
