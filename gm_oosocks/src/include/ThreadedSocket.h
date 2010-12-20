@@ -305,6 +305,8 @@ public:
 		while(!m_hClose)
 		{
 		}
+		void *out = NULL;
+		pthread_join(m_Thread, &out);
 		pthread_cancel(m_Thread);
 #endif
 
