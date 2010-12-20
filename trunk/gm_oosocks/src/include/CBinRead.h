@@ -114,6 +114,16 @@ public:
 		return ret;
 	};
 
+	short ReadShort(void)
+	{
+		if(m_pData == NULL || m_iReadPosition >= m_iDataSize)
+			return 0;
+
+		short ret = *(short *)&m_pData[m_iReadPosition];
+		m_iReadPosition += sizeof(short);
+		return ret;
+	};
+
 	unsigned char PeekByte(void)
 	{
 		if(m_pData == NULL || m_iReadPosition >= m_iDataSize)
@@ -129,6 +139,16 @@ public:
 			
 		const char *ret = (const char *)&m_pData[m_iReadPosition];
 		m_iReadPosition += strlen(ret) + 1;
+		return ret;
+	};
+
+	const char *ReadStr(size_t size)
+	{
+		if(m_pData == NULL || m_iReadPosition >= m_iDataSize)
+			return NULL;
+			
+		const char *ret = (const char *)&m_pData[m_iReadPosition];
+		m_iReadPosition += size;
 		return ret;
 	};
 

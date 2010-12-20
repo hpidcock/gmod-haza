@@ -338,6 +338,20 @@ namespace BinRead
 		return 1;
 	};
 
+	LUA_FUNCTION(ReadShort)
+	{
+		Lua()->CheckType(1, TYPE_BINREAD);
+
+		CBinRead *read = reinterpret_cast<CBinRead *>(Lua()->GetUserData(1));
+
+		if(read == NULL)
+			return 0;
+
+		Lua()->Push((float)read->ReadShort());
+
+		return 1;
+	};
+
 	LUA_FUNCTION(ReadFloat)
 	{
 		Lua()->CheckType(1, TYPE_BINREAD);
@@ -375,7 +389,21 @@ namespace BinRead
 		if(read == NULL)
 			return 0;
 
-		Lua()->Push(read->ReadStr());
+		int size = Lua()->GetInteger(2);
+		if(Lua()->GetType(2) == GLua::TYPE_NUMBER && size > 0 && size <= (read->GetSize() - read->GetReadPosition()))
+		{
+			char *temp = new char[size + 1];
+			memcpy(temp, read->ReadStr(), size);
+			temp[size] = 0;
+
+			Lua()->Push(temp);
+
+			delete [] temp;
+		}
+		else
+		{
+			Lua()->Push(read->ReadStr());
+		}
 
 		return 1;
 	};
@@ -522,6 +550,21 @@ namespace BinWrite
 		return 0;
 	};
 
+	LUA_FUNCTION(WriteShort)
+	{
+		Lua()->CheckType(1, TYPE_BINWRITE);
+		Lua()->CheckType(2, GLua::TYPE_NUMBER);
+
+		CBinWrite *write = reinterpret_cast<CBinWrite *>(Lua()->GetUserData(1));
+
+		if(write == NULL)
+			return 0;
+
+		write->Write((short)Lua()->GetInteger(2));
+
+		return 0;
+	};
+
 	LUA_FUNCTION(WriteByte)
 	{
 		Lua()->CheckType(1, TYPE_BINWRITE);
@@ -548,6 +591,39 @@ namespace BinWrite
 			return 0;
 
 		write->Write(Lua()->GetString(2), GetStringSize(L, 2));
+
+		return 0;
+	};
+
+	LUA_FUNCTION(WriteBinWrite)
+	{
+		Lua()->CheckType(1, TYPE_BINWRITE);
+		Lua()->CheckType(2, TYPE_BINWRITE);
+
+		CBinWrite *write = reinterpret_cast<CBinWrite *>(Lua()->GetUserData(1));
+		CBinWrite *write2 = reinterpret_cast<CBinWrite *>(Lua()->GetUserData(2));
+
+		if(write == NULL || write2 == NULL || write2->GetSize() == 0)
+			return 0;
+
+		size_t size = 0;
+		write->Write((const char *)write2->GetData(size), size);
+
+		return 0;
+	};
+
+	LUA_FUNCTION(WriteStringZeroTerminated)
+	{
+		Lua()->CheckType(1, TYPE_BINWRITE);
+		Lua()->CheckType(2, GLua::TYPE_STRING);
+
+		CBinWrite *write = reinterpret_cast<CBinWrite *>(Lua()->GetUserData(1));
+
+		if(write == NULL)
+			return 0;
+
+		write->Write(Lua()->GetString(2), GetStringSize(L, 2));
+		write->Write('\0');
 
 		return 0;
 	};
@@ -594,6 +670,7 @@ int Init(lua_State* L)
 		__index->SetMember("ReadByte", BinRead::ReadByte);
 		__index->SetMember("ReadDouble", BinRead::ReadDouble);
 		__index->SetMember("ReadInt", BinRead::ReadInt);
+		__index->SetMember("ReadShort", BinRead::ReadShort);
 		__index->SetMember("Rewind", BinRead::Rewind);
 		__index->SetMember("ReadFloat", BinRead::ReadFloat);
 		__index->SetMember("ReadString", BinRead::ReadString);
@@ -610,8 +687,11 @@ int Init(lua_State* L)
 		__index->SetMember("WriteByte", BinWrite::WriteByte);
 		__index->SetMember("WriteDouble", BinWrite::WriteDouble);
 		__index->SetMember("WriteInt", BinWrite::WriteInt);
+		__index->SetMember("WriteShort", BinWrite::WriteShort);
 		__index->SetMember("WriteFloat", BinWrite::WriteFloat);
 		__index->SetMember("WriteString", BinWrite::WriteString);
+		__index->SetMember("WriteStringZeroTerminated", BinWrite::WriteStringZeroTerminated);
+		__index->SetMember("WriteBinWrite", BinWrite::WriteBinWrite);
 
 		metaBinWrite->SetMember("__index", __index);
 	}
