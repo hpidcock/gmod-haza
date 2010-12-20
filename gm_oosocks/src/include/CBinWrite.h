@@ -86,6 +86,17 @@ public:
 		m_iWritePosition += sizeof(int);
 	};
 
+	void Write(short val)
+	{
+		if(m_pData == NULL)
+			return;
+
+		FitData(sizeof(short));
+		short *setVal = (short *)&m_pData[m_iWritePosition];
+		*setVal = val;
+		m_iWritePosition += sizeof(short);
+	};
+
 	void Write(float val)
 	{
 		if(m_pData == NULL)
