@@ -69,6 +69,7 @@ public:
 		if(m_pData == NULL)
 			return;
 
+		FitData(sizeof(double));
 		double *setVal = (double *)&m_pData[m_iWritePosition];
 		*setVal = val;
 		m_iWritePosition += sizeof(double);
@@ -79,6 +80,7 @@ public:
 		if(m_pData == NULL)
 			return;
 
+		FitData(sizeof(int));
 		int *setVal = (int *)&m_pData[m_iWritePosition];
 		*setVal = val;
 		m_iWritePosition += sizeof(int);
@@ -89,6 +91,7 @@ public:
 		if(m_pData == NULL)
 			return;
 
+		FitData(sizeof(float));
 		float *setVal = (float *)&m_pData[m_iWritePosition];
 		*setVal = val;
 		m_iWritePosition += sizeof(float);
@@ -99,6 +102,7 @@ public:
 		if(m_pData == NULL)
 			return;
 
+		FitData(sizeof(char));
 		char *setVal = (char *)&m_pData[m_iWritePosition];
 		*setVal = val;
 		m_iWritePosition += sizeof(char);
@@ -108,7 +112,8 @@ public:
 	{
 		if(m_pData == NULL)
 			return;
-			
+		
+		FitData(len);
 		char *setVal = (char *)&m_pData[m_iWritePosition];
 		memcpy(setVal, str, len);
 		m_iWritePosition += len;
