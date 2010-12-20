@@ -157,7 +157,7 @@ namespace OOSock
 		}
 		else if(Lua()->GetType(2) == TYPE_BINWRITE)
 		{
-			CBinWrite *write = reinterpret_cast<CBinWrite *>(Lua()->GetUserData(1));
+			CBinWrite *write = reinterpret_cast<CBinWrite *>(Lua()->GetUserData(2));
 
 			if(write == NULL)
 				return 0;
